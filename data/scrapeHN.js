@@ -10,6 +10,27 @@
 const utilities = require('./utilities');
 const hnAPIFunctions = require('./hnAPIFunctions');
 
+/*
+    Grab a user's favorites list from Hacker News HTML.
+    (Sorry, I don't believe this is in the API)
+    This is also not in the pipeline, as I want to save
+    user data extraction for later, and I forgot about this originally.
+*/
+
+async function grabUserFavorites(username){
+    const favoritesUrl = `https://news.ycombinator.com/favorites?id=${username}`;
+
+
+    const nameString = `Favorites for user ${username}`;
+
+    try {
+        const favoritesHTML = await utilities.grabLinkContent(favoritesUrl);
+        return utilities.scrapePostIDsFromHNPage(favoritesHTML, nameString);
+    }catch (err){
+        console.log(`Error scraping favorite posts from user ${username} - there are likely none.`);
+        return [];
+    }
+}
 
 /*
 
@@ -35,40 +56,20 @@ async function readFPHTMLFile(date){
 
 */
 function grabPostIDsForFP(htmlString, date){
+    const dateString = utilities.getDateString(date);
+
+    const nameString = `Front page on date ${dateString}`;
+
     const postIDFP = {
         date: {...date},
         postIDs: []
-    }
+    };
 
-    const dateString = utilities.getDateString(date);
-
-    //use this regex to pull a list of post IDs from the raw HTML
-    const itemIDRegex = /item\?id=(\d+)/g;
-    const itemIDMatches = htmlString.match(itemIDRegex);
-    //if the returned list from the regex match is null, something is wrong
-    if (itemIDMatches != null){
-        //first filter to only catch uniques
-        const idStrings = itemIDMatches.filter((item, index) => index == 0 ? true : itemIDMatches[index - 1] != item);
-        
-        //pull out id with another regex
-        const numRegex = /(\d+)/;
-        const postIDs = idStrings.map(idString => {
-            const idFirst = idString.search(numRegex);
-            //if it's -1, someting is wrong, indicate and filter out later
-            if (idFirst == -1){
-                console.log(`Error in parsing a post ID from front page on ${dateString}`);
-                return '-1';
-            }else {
-                return idString.slice(idFirst);
-            }
-        });
-
-        filteredPostIDs = postIDs.filter(postID => postID != '-1').map(postID => parseInt(postID));
-        
-        postIDFP.postIDs = filteredPostIDs;
-
-    }else {
-        console.log(`Error in grabbing post IDs from front page on ${dateString}`);
+    try {
+        const postIDs = utilities.scrapePostIDsFromHNPage(htmlString, nameString);
+        postIDFP.postIDs = postIDs;
+    }catch (err){
+        console.log(`Error in grabbing post IDs from front page on ${dateString}.`)
     }
 
     return postIDFP;
@@ -498,20 +499,25 @@ async function main(){
 
     const startDate = {
         year: 2024,
-        month: 12, 
+        month: 11, 
         day: 8
     };
 
     const endDate = {
         year: 2024, 
-        month: 12,
+        month: 11,
         day: 9
     };
-    runFullPipelineOnPastFPs(startDate, endDate, true);
+    
+    await runFullPipelineOnPastFPs(startDate, endDate, false);
        
 }
 
+//main();
+
 module.exports = {
     runFullPipelineOnCurrentFP,
-    runFullPipelineOnPastFPs
+    runFullPipelineOnPastFPs,
+    grabUserFavorites,
+    grabLinkContentForPostList
 }

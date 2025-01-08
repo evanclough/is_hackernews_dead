@@ -204,6 +204,40 @@ function removeDuplicateObjectsByKeySeq(array, keySeq){
     });
 }
 
+/*
+
+    Scrape all post IDs from a Hacker News HTML page containing a list of posts,
+    used in getting post IDs from front pages, and favorites pages.
+
+*/
+function scrapePostIDsFromHNPage(htmlString, name){
+    //use this regex to pull a list of post IDs from the raw HTML
+    const itemIDRegex = /item\?id=(\d+)/g;
+    const itemIDMatches = htmlString.match(itemIDRegex);
+    //if the returned list from the regex match is null, something is wrong    
+    if (itemIDMatches != null){
+        //first filter to only catch uniques
+        const idStrings = itemIDMatches.filter((item, index) => index == 0 ? true : itemIDMatches[index - 1] != item);
+        
+        //pull out id with another regex
+        const numRegex = /(\d+)/;
+        const postIDs = idStrings.map(idString => {
+            const idFirst = idString.search(numRegex);
+            //if it's -1, someting is wrong, indicate and filter out later
+            if (idFirst == -1){
+                console.log(`Error in parsing post IDs from Hacker News HTML of name ${name}`);
+                return '-1';
+            }else {
+                return idString.slice(idFirst);
+            }
+        });
+
+        const filteredPostIDs = postIDs.filter(postID => postID != '-1').map(postID => parseInt(postID));
+        return filteredPostIDs;
+    }else {
+        throw `Error in parsing post IDs from Hacker News HTML of name ${name}`
+    }
+}
 
 module.exports = {
     readFile, 
@@ -217,5 +251,6 @@ module.exports = {
     sleep,
     grabLinkContent,
     removeDuplicateAtoms,
-    removeDuplicateObjectsByKeySeq
+    removeDuplicateObjectsByKeySeq,
+    scrapePostIDsFromHNPage
 }
