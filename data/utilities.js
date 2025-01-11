@@ -175,7 +175,7 @@ function sleep(ms) {
 */
 
 async function grabLinkContent(url){
-    const response = await axios.get(url);
+    const response = await axios.get(url, {timeout: 3000});
     return response.data;
 }
 
@@ -239,6 +239,18 @@ function scrapePostIDsFromHNPage(htmlString, name){
     }
 }
 
+/*
+
+Select N random elements from a given array (with potential duplicates)
+
+*/
+function selectNRandomElements(array, N){
+    if (array.length === 0){
+        throw "Error: cannot select random elements from empty array";
+    }
+    return [...Array(N)].map(a => array[Math.floor(Math.random() * array.length)]);
+}
+
 module.exports = {
     readFile, 
     readJsonFile, 
@@ -252,5 +264,6 @@ module.exports = {
     grabLinkContent,
     removeDuplicateAtoms,
     removeDuplicateObjectsByKeySeq,
-    scrapePostIDsFromHNPage
+    scrapePostIDsFromHNPage,
+    selectNRandomElements
 }

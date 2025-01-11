@@ -346,7 +346,7 @@ async function grabLinkContentForPostList(posts, interval){
             try {
                 const linkContent = await grabLinkContentForPost(posts[i].item.url);
                 console.log(`Successfully got link content for link ${posts[i].item.url} on post ${posts[i].id}`);
-                postWithLinkContent.linkContent = {error: false, link: posts[i].item.url, content: linkContent};
+                postWithLinkContent.linkContent = {error: false, link: posts[i].item.url, content: linkContent.slice(0,10000000)};
             } catch (err) {
                 console.log(`Error in fetching link content for link ${posts[i].item.url} on post ${posts[i].id}`);
                 postWithLinkContent.linkContent = {error: true, link: posts[i].item.url, content: ""};
@@ -405,7 +405,7 @@ async function createInitialDataset(finalScrapedJson, name){
     let uniquePosts = [];
 
     for(let i = 0; i < frontPages.length; i++){
-        const filteredPosts = frontPages[i].posts.filter(post => !post.error).map(post => post.item);
+        const filteredPosts = frontPages[i].posts.filter(post => !post.error);
         const deduplicatedPosts = utilities.removeDuplicateObjectsByKeySeq(filteredPosts, ["id"]);
         uniquePosts = [...uniquePosts, ...deduplicatedPosts];
     }
@@ -509,7 +509,7 @@ async function main(){
         day: 9
     };
     
-    await runFullPipelineOnPastFPs(startDate, endDate, false);
+    await runFullPipelineOnPastFPs(startDate, endDate, true);
        
 }
 

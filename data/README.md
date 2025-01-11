@@ -211,7 +211,77 @@ Future Ideas:
 - Create human feedback mechanism to be run with the live port
 
 
+User Feature Extraction:
+First, users should be in a database, so retrieving them during training is faster than searching the json, and also for RAG.
+Post history and other text stuff can be embedded for RAG during generation time.
 
+But to start the schema:
+
+What I have from HN:
+ - user: {
+        "about" : "This is a test",
+        "created" : 1173923446,
+        "id" : "jl",
+        "karma" : 2937,
+        "submitted" : [ 8265435, ... ]
+    }
+
+Can do immediately: fetch items in submitted list
+
+Probably don't need entire post history of necessary, could take that at basis
+
+The schema needs to consist of things that I can replicate from scratch in creating a bot.
+
+These profiles will be created initially for a given user pool, but could be updated over time.
+
+Would be good to keep it minimal to start:
+
+user {
+    public facing:
+        {
+            id: username,
+            karma,
+            created,
+            about?,
+            submitted,
+        }
+    private:
+        {
+            post_frequency,
+            comment_frequency,
+            text_samples:   a few sentences as an example for the user's grammar/cadence, 
+                            to be passed into LLM call for generation,
+            interests:      A list of strings on topics the user is interested in, ranked.
+                            LLM Prompt: "Given this user's post history, please give their top five topics of interest, in JSON format, as a list of strings.
+            beliefs:        A list of strings of beliefs the user has, ranked.
+        }
+
+}
+
+LLM:
+Gonna start with OpenAI, but swapping it out / testing others in the long run would be trivial
+
+GPT-4o pricing:
+$0.00250 / 1K input tokens
+
+1/10: 
+
+The LLM shit should be done in python.
+
+Create a database, finish the scraping pipeline to do all non-LLM work in javascript, 
+put all in database, then LLM shit in python, then we ready
+
+users table, posts table, comments table,
+user pools can be left as usernames, used to pull from database in running the model.
+content strings will be converted to a list of IDs to pull from database
+
+when im ready:
+make users table
+finish js pipeline to put all user shit in there
+make posts/comments table
+finish js pipeline to put all post/comment shit in there
+write python pipelines to use LLMs for final feature extraction from user pools and content string list into database
+run the model!
 
 
 
