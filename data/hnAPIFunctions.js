@@ -36,6 +36,7 @@ async function grabListOfItems(idList, interval){
         try {
             const retrievedItem = await grabItemFromAPI(idList[i]);
             console.log(`Grabbed item with ID ${idList[i]} of type ${retrievedItem.type}`);
+            console.log(`Item ${i} of ${idList.length}.\n`);
             items.push({error: false, id: idList[i], item: retrievedItem});
         }catch (err) {
             items.push({error: true, id: idList[i], item: {}});
@@ -74,6 +75,7 @@ async function grabListOfUsers(usernameList, interval){
         try {
             const retrievedUser = await grabUserFromAPI(usernameList[i]);
             console.log(`Grabbed user with username: ${usernameList[i]}`);
+            console.log(`User ${i} of ${usernameList.length}\n`);
             users.push({error: false, username: usernameList[i], user: retrievedUser});
         }catch (err) {
             users.push({error: true, username: usernameList[i], user: {}});

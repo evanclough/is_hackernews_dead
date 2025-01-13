@@ -6,6 +6,8 @@
 const sqlite = require('sqlite');
 const sqlite3 = require('sqlite3');
 
+const fs = require('fs').promises;
+
 async function insertUserProfiles(dbPath, userProfiles){
     const db = await sqlite.open({ filename: `./${dbPath}.db`, driver: sqlite3.Database });
 
@@ -28,7 +30,7 @@ async function insertUserProfiles(dbPath, userProfiles){
     await db.run(createUserProfilesTableQuery);
 
     const insertUserQuery = `
-        INSERT INTO userProfiles (username, about, karma, created, postIDs, commentIDs, favoritePostIDs, textSamples, interests, beliefs)
+        INSERT OR IGNORE INTO userProfiles (username, about, karma, created, postIDs, commentIDs, favoritePostIDs, textSamples, interests, beliefs)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
 
@@ -39,7 +41,10 @@ async function insertUserProfiles(dbPath, userProfiles){
             console.log(`Error inserting user profiles ${err}`);
         }
     }
+
     await db.close();
+
+    console.log(`Successfully initialized table and inserted user profiles at ${dbPath}`)
 
 }
 
@@ -64,7 +69,7 @@ async function insertPosts(dbPath, posts){
     await db.run(createPostsTableQuery);
 
     const insertPostsQuery = `
-            INSERT INTO posts (by, id, score, time, title, text, url, urlContent)
+            INSERT OR IGNORE INTO posts (by, id, score, time, title, text, url, urlContent)
             VALUES (?, ?, ?, ?, ?,?,?,?)
     `;
 
@@ -78,6 +83,9 @@ async function insertPosts(dbPath, posts){
     }
 
     await db.close();
+
+    console.log(`Successfully initialized table and inserted posts at ${dbPath}`);
+
 }
 
 async function insertComments(dbPath, comments) {
@@ -95,7 +103,7 @@ async function insertComments(dbPath, comments) {
     await db.run(createCommentsTableQuery);
 
     const insertCommentsQuery = `
-            INSERT INTO comments (by, id, time, text)
+            INSERT OR IGNORE INTO comments (by, id, time, text)
             VALUES (?, ?, ?, ?)
     `;
 
@@ -108,6 +116,9 @@ async function insertComments(dbPath, comments) {
     }
 
     await db.close();
+
+    console.log(`Successfully initialized table and inserted comments at ${dbPath}`);
+
 }
 
 
@@ -120,9 +131,79 @@ async function initializeDB(dbPath){
     await db.close();
 }
 
+/*
+    Merge the contents of two databases, and 
+    rename the resulting database to a final name.
+
+    (all chatgpt and it works, i don't want to fuck with it)
+*/
+async function mergeDatabases(leftDBPath, rightDBPath, finalDBPath){
+    const leftDB = await sqlite.open({filename: leftDBPath, driver: sqlite3.Database});
+    const rightDB = await sqlite.open({filename: rightDBPath, driver: sqlite3.Database});
+
+    await leftDB.exec("BEGIN TRANSACTION");
+    const tables = await rightDB.all("SELECT name FROM sqlite_master WHERE type='table'");
+
+    console.log(`Merging databases ${leftDBPath} and ${rightDBPath} into ${finalDBPath}...`);
+
+    for (const table of tables) {
+        const tableName = table.name;
+        console.log(`Merging table: ${tableName}`);
+  
+        // Get the rows from tables in the right database
+        const rows = await rightDB.all(`SELECT * FROM ${tableName}`);
+  
+        //chatgpt
+        if (rows.length > 0) {
+            for (const row of rows) {
+                // Build the insert SQL statement dynamically based on the row
+                const columns = Object.keys(row).join(',');
+                const placeholders = Object.keys(row).map(() => '?').join(',');
+                const values = Object.values(row);
+    
+                // Insert the data into the right database, using INSERT OR IGNORE to avoid duplicate primary keys
+                const insertSQL = `INSERT OR IGNORE INTO ${tableName} (${columns}) VALUES (${placeholders})`;
+
+                await leftDB.run(insertSQL, values);
+            }
+        }
+    }
+
+    await leftDB.exec('COMMIT');
+
+    await leftDB.close();
+    await rightDB.close();
+
+    //move the merged left database to the final db path, and remove the right database
+    await fs.rename(leftDBPath, finalDBPath);
+    await fs.unlink(rightDBPath);
+}
+
+/*
+async function main(){
+    //await initializeDB("test4");
+    //await initializeDB("test5");
+    
+    await insertComments("test4", [{id: 1, time: '1', text: '1', by: '1'}, {id: 2, time: '1', text: '1', by: '1'}]);
+    await insertComments("test5", [{id: 1, time: '1', text: '1', by: '2'}, {id: 3, time: '1', text: '1', by: '1'}]);
+    await insertUserProfiles("test4", [{username: "test", about: "testabout1", karma: 2, commentIDs: [], favoritePostIDs: [],textSamples: [], interests: [], beliefs: []}, {username: "test2", about: "testabout", karma: 2, commentIDs: [], favoritePostIDs: [],textSamples: [], interests: [], beliefs: []}])
+    await insertUserProfiles("test5", [{username: "test", about: "testabout2", karma: 2, commentIDs: [], favoritePostIDs: [],textSamples: [], interests: [], beliefs: []}, {username: "test3", about: "testabout", karma: 2, commentIDs: [], favoritePostIDs: [],textSamples: [], interests: [], beliefs: []}])
+    await insertPosts("test4", [{id: 1, time: '111', text: '1', by: '1', title: '1', score: 2, url: '1', urlContent: '1'}, {id: 2, time: '111', text: '1', by: '1', title: '1', score: 2, url: '1', urlContent: '1'}]);
+    await insertPosts("test5", [{id: 1, time: '222', text: '1', by: '1', title: '1', score: 2, url: '1', urlContent: '1'}, {id: 3, time: '111', text: '1', by: '1', title: '1', score: 2, url: '1', urlContent: '1'}])
+    
+
+    await mergeDatabases("./test4.db", "./test5.db", "./test6.db");
+    
+
+}
+
+main();
+*/
+
 module.exports = {
     initializeDB,
     insertUserProfiles,
     insertPosts,
-    insertComments
+    insertComments,
+    mergeDatabases
 }

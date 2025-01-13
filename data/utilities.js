@@ -6,8 +6,10 @@
 */
 
 const fs = require('fs').promises;
+const path = require('path');
 
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 
 /*
@@ -72,6 +74,73 @@ async function createDirectory(path) {
         console.log(`Successfully created directory at path ${path}`);
     } catch (err) {
         console.error(`Error creating directory at path ${path}:`, err);
+    }
+}
+
+/*
+
+    Return the names of all files in a given directory.
+
+*/
+
+async function getFiles(directoryPath) {
+    try {
+      const files = await fs.readdir(directoryPath);
+      const onlyFiles = [];
+      
+      for (const file of files) {
+        const filePath = path.join(directoryPath, file);
+        const stats = await fs.stat(filePath);
+        if (stats.isFile()) {
+          onlyFiles.push(file);
+        }
+      }
+  
+      return onlyFiles;
+    } catch (err) {
+      console.error('Error reading directory:', err);
+      return [];
+    }
+}
+
+/*
+
+    Return the names of all directories in a given directory.
+
+*/
+
+async function getDirectories(directoryPath) {
+    try {
+      const files = await fs.readdir(directoryPath);
+      const onlyDirectories = [];
+      
+      for (const file of files) {
+        const filePath = path.join(directoryPath, file);
+        const stats = await fs.stat(filePath);
+        if (!stats.isFile()) {
+          onlyDirectories.push(file);
+        }
+      }
+  
+      return onlyDirectories;
+    } catch (err) {
+      console.error('Error reading directory:', err);
+      return [];
+    }
+}
+
+
+/*
+
+    Check whether or not a given file exists.
+
+*/
+async function checkFileIfExists(filePath) {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch (error) {
+      return false;
     }
 }
 
@@ -172,11 +241,16 @@ function sleep(ms) {
 
 /*
     Runs a get request on the given URL.
+
+    (Currently trying cheerio for only getting useful info).
 */
 
 async function grabLinkContent(url){
     const response = await axios.get(url, {timeout: 3000});
-    return response.data;
+    const cheerioData = cheerio.load(response.data);
+    const content = cheerioData('body').text();
+
+    return content;
 }
 
 /*
@@ -265,5 +339,8 @@ module.exports = {
     removeDuplicateAtoms,
     removeDuplicateObjectsByKeySeq,
     scrapePostIDsFromHNPage,
-    selectNRandomElements
+    selectNRandomElements,
+    getFiles,
+    getDirectories,
+    checkFileIfExists
 }
