@@ -325,6 +325,38 @@ function selectNRandomElements(array, N){
     return [...Array(N)].map(a => array[Math.floor(Math.random() * array.length)]);
 }
 
+const { exec } = require('child_process');
+
+/*
+    Intermediary function for running commands with async/await
+*/
+function execPromise(command){
+    return new Promise((resolve, reject) => {
+      exec(command, (error, stdout, stderr) => {
+        if (error) {
+          reject(`Error: ${error.message}`);
+        } else if (stderr) {
+          reject(`stderr: ${stderr}`);
+        } else {
+          resolve(stdout);
+        }
+      });
+    });
+}
+
+/*
+    Runs a given command.
+*/
+  
+async function runCommand(command)  {
+    try {
+        const result = await execPromise(command);
+        console.log(`Command output:\n${result}`);
+    } catch (err) {
+        console.error(`Failed to execute command: ${err}`);
+    }
+}
+
 module.exports = {
     readFile, 
     readJsonFile, 
@@ -342,5 +374,6 @@ module.exports = {
     selectNRandomElements,
     getFiles,
     getDirectories,
-    checkFileIfExists
+    checkFileIfExists,
+    runCommand
 }

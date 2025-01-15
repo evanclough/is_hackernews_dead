@@ -44,16 +44,16 @@ async function mergeDatasets(leftDataset, rightDataset, finalName){
     await utilities.writeJsonToFile(mergedUsernameList, `./completeDatasets/${finalName}/usernames.json`);
     await utilities.writeJsonToFile(mergedContentStringList, `./completeDatasets/${finalName}/contentStringLists.json`);
 
-    //remove old directories
-    //await fs.rm(`./completeDatasets/${leftDataset}`, { recursive: true, force: true });
-    //await fs.rm(`./completeDatasets/${rightDataset}`, { recursive: true, force: true });
-
     //merge the contents of the two databases
-    const leftDBPath = `./completeDatasets/${leftDataset}/database.db`;
-    const rightDBPath = `./completeDatasets/${rightDataset}/database.db`;
-    const finalDBPath = `./completeDatasets/${finalName}/database.db`;
+    const leftDBPath = `./completeDatasets/${leftDataset}/data.db`;
+    const rightDBPath = `./completeDatasets/${rightDataset}/data.db`;
+    const finalDBPath = `./completeDatasets/${finalName}/data.db`;
 
     await dbUtils.mergeDatabases(leftDBPath, rightDBPath, finalDBPath);
+
+    //remove old directories
+    await fs.rm(`./completeDatasets/${leftDataset}`, { recursive: true, force: true });
+    await fs.rm(`./completeDatasets/${rightDataset}`, { recursive: true, force: true });
 
     console.log(`Successfully merged datasets ${rightDataset} and ${leftDataset}.`);
     
@@ -68,31 +68,60 @@ async function mergeDatasetList(completeDatasets, finalName){
     if (completeDatasets.length < 2){
         throw "Error: cannot merge list of datasets with length smaller than two.";
     }
-    
-    await mergeDatasets(completeDatasets[0], completeDatasets[1], finalName);
 
-    for(let i = 2; i < completeDatasets.length; i++){
-        await fs.rename(`./completeDatasets/${finalName}`, `./completeDatasets/temp`);
-        finalDataset = await mergeDatasets("temp", completeDatasets[i], finalName);
+    let currentIncompleteDatasets = [...completeDatasets];
+    let i = 0;
+
+    while (currentIncompleteDatasets.length > 1){
+        console.log(`${i} ${currentIncompleteDatasets}`);
+        const currentIntermediaryNames = [];
+
+        for(let j = 1; j < currentIncompleteDatasets.length; j+=2){
+            const currentIntermediaryName = currentIncompleteDatasets.length == 2 ? finalName : `${finalName}-MERGE${i}-${j}`;
+            currentIntermediaryNames.push(currentIntermediaryName);
+            await mergeDatasets(currentIncompleteDatasets[j - 1], currentIncompleteDatasets[j], currentIntermediaryName);
+        }
+
+        if (currentIncompleteDatasets.length % 2 === 1){
+            currentIntermediaryNames.push(currentIncompleteDatasets[currentIncompleteDatasets.length - 1]);
+        }
+
+        currentIncompleteDatasets = [...currentIntermediaryNames];
+        ++i;
     }
-
 }
 
 /*
 
-    Merge all completed datasets currently stored locally.
+    Merge all completed datasets stored in a given directory
 
 */
-async function mergeAllCompletedDatasets(finalName){
-    const completeDatasets = await utilities.getDirectories("./completeDatasets");
+async function mergeDirectory(dirName){
+    const completeDatasetNames = await utilities.getDirectories(`./completeDatasets/${dirName}`);
 
-    await mergeDatasetList(completeDatasets, finalName);
+    const completeDatasets = completeDatasetNames.map(n => `${dirName}/${n}`);
+
+    const tempMergePath = `${dirName}/TEMP`;
+
+    await mergeDatasetList(completeDatasets, tempMergePath);
+
+    await fs.copyFile(`./completeDatasets/${tempMergePath}/usernames.json`, `./completeDatasets/${dirName}/usernames.json`);
+    await fs.copyFile(`./completeDatasets/${tempMergePath}/contentStringLists.json`, `./completeDatasets/${dirName}/contentStringLists.json`);
+    await fs.copyFile(`./completeDatasets/${tempMergePath}/data.db`, `./completeDatasets/${dirName}/data.db`);
+    await fs.rm(`./completeDatasets/${tempMergePath}`, { recursive: true, force: true });
+
 }
 
 
 async function main(){
-    await mergeDatasetList(["2024-11-7to2024-11-8", "2024-11-8to2024-11-9"], "test3");
-    //await mergeAllCompletedDatasets("test");
+    console.log()
+
+    await mergeDirectory("2024-12-7to2024-12-8");
 }
 
-main();
+//main();
+
+module.exports = {
+    mergeDirectory,
+    mergeDatasetList
+}
