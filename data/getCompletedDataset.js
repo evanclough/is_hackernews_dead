@@ -6,10 +6,12 @@ A script to get a completed dataset of specified parameters
 
 */
 
-const utilities = require ("./utilities");
+const utilities = require("./utilities");
 
 
-
+/*
+    Fully complete an original dataset, given a user and post batch size.
+*/
 async function completeOriginalDataset(originalDatasetName, userBatchSize, postsBatchSize){
 
     const completeDatasetDir = `./completeDatasets/${originalDatasetName}`;

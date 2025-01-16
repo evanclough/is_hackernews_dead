@@ -1,6 +1,8 @@
 /*
+
     Functions for creating and inserting into the sqlite database to store
     posts, comments, and user profiles for running the model
+
 */
 
 const sqlite = require('sqlite');
@@ -8,6 +10,9 @@ const sqlite3 = require('sqlite3');
 
 const fs = require('fs').promises;
 
+/*
+    Insert a list of user profiles into the database.
+*/
 async function insertUserProfiles(dbPath, userProfiles){
     const db = await sqlite.open({ filename: `./${dbPath}.db`, driver: sqlite3.Database });
 
@@ -32,7 +37,7 @@ async function insertUserProfiles(dbPath, userProfiles){
     const insertUserQuery = `
         INSERT OR IGNORE INTO userProfiles (username, about, karma, created, postIDs, commentIDs, favoritePostIDs, textSamples, interests, beliefs)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `
+    `;
 
     for(let i = 0; i < userProfiles.length; i++){
         try {
@@ -44,14 +49,15 @@ async function insertUserProfiles(dbPath, userProfiles){
 
     await db.close();
 
-    console.log(`Successfully initialized table and inserted user profiles at ${dbPath}`)
-
+    console.log(`Successfully initialized table and inserted user profiles at ${dbPath}`);
 }
 
+/*
+    Insert a list of posts into the database.
+*/
 async function insertPosts(dbPath, posts){
 
     const db = await sqlite.open({ filename: `./${dbPath}.db`, driver: sqlite3.Database });
-
 
     const createPostsTableQuery = `
         CREATE TABLE IF NOT EXISTS posts   (
@@ -85,9 +91,11 @@ async function insertPosts(dbPath, posts){
     await db.close();
 
     console.log(`Successfully initialized table and inserted posts at ${dbPath}`);
-
 }
 
+/*
+    Insert a list of comments into the database.
+*/
 async function insertComments(dbPath, comments) {
     const db = await sqlite.open({ filename: `./${dbPath}.db`, driver: sqlite3.Database });
 
@@ -118,16 +126,16 @@ async function insertComments(dbPath, comments) {
     await db.close();
 
     console.log(`Successfully initialized table and inserted comments at ${dbPath}`);
-
 }
 
-
+/*
+    Initialize the sqlite database.
+*/
 async function initializeDB(dbPath){
     const db = await sqlite.open({ filename: `./${dbPath}.db`, driver: sqlite3.Database });
 
-    console.log('Database created successfully!');
+    console.log(`Successfully created database at ./${dbPath}.db`);
     
-    // Close the database connection
     await db.close();
 }
 
@@ -178,27 +186,6 @@ async function mergeDatabases(leftDBPath, rightDBPath, finalDBPath){
     await fs.rename(leftDBPath, finalDBPath);
     await fs.unlink(rightDBPath);
 }
-
-/*
-async function main(){
-    //await initializeDB("test4");
-    //await initializeDB("test5");
-    
-    await insertComments("test4", [{id: 1, time: '1', text: '1', by: '1'}, {id: 2, time: '1', text: '1', by: '1'}]);
-    await insertComments("test5", [{id: 1, time: '1', text: '1', by: '2'}, {id: 3, time: '1', text: '1', by: '1'}]);
-    await insertUserProfiles("test4", [{username: "test", about: "testabout1", karma: 2, commentIDs: [], favoritePostIDs: [],textSamples: [], interests: [], beliefs: []}, {username: "test2", about: "testabout", karma: 2, commentIDs: [], favoritePostIDs: [],textSamples: [], interests: [], beliefs: []}])
-    await insertUserProfiles("test5", [{username: "test", about: "testabout2", karma: 2, commentIDs: [], favoritePostIDs: [],textSamples: [], interests: [], beliefs: []}, {username: "test3", about: "testabout", karma: 2, commentIDs: [], favoritePostIDs: [],textSamples: [], interests: [], beliefs: []}])
-    await insertPosts("test4", [{id: 1, time: '111', text: '1', by: '1', title: '1', score: 2, url: '1', urlContent: '1'}, {id: 2, time: '111', text: '1', by: '1', title: '1', score: 2, url: '1', urlContent: '1'}]);
-    await insertPosts("test5", [{id: 1, time: '222', text: '1', by: '1', title: '1', score: 2, url: '1', urlContent: '1'}, {id: 3, time: '111', text: '1', by: '1', title: '1', score: 2, url: '1', urlContent: '1'}])
-    
-
-    await mergeDatabases("./test4.db", "./test5.db", "./test6.db");
-    
-
-}
-
-main();
-*/
 
 module.exports = {
     initializeDB,

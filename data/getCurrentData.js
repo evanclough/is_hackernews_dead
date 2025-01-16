@@ -5,7 +5,6 @@
 
 */
 
-
 const scrapeHN = require("./scrapeHN");
 
 async function main(){

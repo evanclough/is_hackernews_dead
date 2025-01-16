@@ -1,25 +1,21 @@
 /*
-
     Various functions used across the different scripts used to 
     retrieve and parse Hacker News data for the experiment.
-
 */
 
 const fs = require('fs').promises;
 const path = require('path');
+const { exec } = require('child_process');
+
 
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-
 /*
-
     Read in the raw string contents of a given file path.
-
 */
 async function readFile(filePath){
     try {
-        // Read the file content asynchronously 
         const data = await fs.readFile(filePath, 'utf8');
         return data;
     } catch (err) {
@@ -29,9 +25,7 @@ async function readFile(filePath){
 
 
 /*
-
     Read in a JSON file from a given file path.
-
 */
 async function readJsonFile(filePath) {
     const data = await readFile(filePath);
@@ -40,9 +34,7 @@ async function readJsonFile(filePath) {
 }
 
 /*
-
     Writes a string to a given file path.
-
 */
 async function writeStringToFile(string, filePath) {
     try {
@@ -54,9 +46,7 @@ async function writeStringToFile(string, filePath) {
 }
 
 /*
-
     Writes a given json file to a given file path.
-
 */
 async function writeJsonToFile(jsonData, filePath) {
     const jsonString = JSON.stringify(jsonData, null, 2);  
@@ -64,9 +54,7 @@ async function writeJsonToFile(jsonData, filePath) {
 }
 
 /*
-
     Create a directory at a given path.
-    
 */
 async function createDirectory(path) {
     try {
@@ -78,11 +66,8 @@ async function createDirectory(path) {
 }
 
 /*
-
     Return the names of all files in a given directory.
-
 */
-
 async function getFiles(directoryPath) {
     try {
       const files = await fs.readdir(directoryPath);
@@ -104,11 +89,8 @@ async function getFiles(directoryPath) {
 }
 
 /*
-
     Return the names of all directories in a given directory.
-
 */
-
 async function getDirectories(directoryPath) {
     try {
       const files = await fs.readdir(directoryPath);
@@ -129,11 +111,8 @@ async function getDirectories(directoryPath) {
     }
 }
 
-
 /*
-
     Check whether or not a given file exists.
-
 */
 async function checkFileIfExists(filePath) {
     try {
@@ -149,7 +128,6 @@ async function checkFileIfExists(filePath) {
     Returns a list of date objects in a given range.
     (There's probably a preset function to do this)
 */
-
 function getDateRange(startDate, endDate){
     //chcek input
     if (startDate.year == undefined || startDate.month == undefined || startDate.day == undefined){
@@ -207,12 +185,9 @@ function getDateRange(startDate, endDate){
     return dateRange;
 }
 
-
 /*
-
     Given a date object, returns a string formatted
     in the way Hacker News does it.
-
 */
 function getDateString(date){
     return `${date.year}-${date.month}-${date.day}`;
@@ -222,7 +197,6 @@ function getDateString(date){
     Given a start and end date, return a string
     containing both.
 */
-
 function getDateRangeString(startDate, endDate){
     const startDateString = getDateString(startDate);
     const endDateString = getDateString(endDate);
@@ -230,10 +204,8 @@ function getDateRangeString(startDate, endDate){
 }
 
 /*
-
     Sleep for a given time period, 
     used in adding intervals between API calls.
-
 */
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -241,10 +213,8 @@ function sleep(ms) {
 
 /*
     Runs a get request on the given URL.
-
-    (Currently trying cheerio for only getting useful info).
+    (Currently trying cheerio to just get the body)
 */
-
 async function grabLinkContent(url){
     const response = await axios.get(url, {timeout: 3000});
     const cheerioData = cheerio.load(response.data);
@@ -279,10 +249,8 @@ function removeDuplicateObjectsByKeySeq(array, keySeq){
 }
 
 /*
-
     Scrape all post IDs from a Hacker News HTML page containing a list of posts,
     used in getting post IDs from front pages, and favorites pages.
-
 */
 function scrapePostIDsFromHNPage(htmlString, name){
     //use this regex to pull a list of post IDs from the raw HTML
@@ -314,9 +282,7 @@ function scrapePostIDsFromHNPage(htmlString, name){
 }
 
 /*
-
 Select N random elements from a given array (with potential duplicates)
-
 */
 function selectNRandomElements(array, N){
     if (array.length === 0){
@@ -324,8 +290,6 @@ function selectNRandomElements(array, N){
     }
     return [...Array(N)].map(a => array[Math.floor(Math.random() * array.length)]);
 }
-
-const { exec } = require('child_process');
 
 /*
     Intermediary function for running commands with async/await
@@ -347,7 +311,6 @@ function execPromise(command){
 /*
     Runs a given command.
 */
-  
 async function runCommand(command)  {
     try {
         const result = await execPromise(command);

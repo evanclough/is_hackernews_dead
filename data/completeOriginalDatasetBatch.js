@@ -13,13 +13,9 @@ const dbUtils = require("./dbUtils");
 
 const fs = require("fs").promises;
 
-
 /*
-
     Complete a record for an original post, to be inserted into the database.
-
 */
-
 function completeOriginalPost(originalPost){
     const completePostObject = {
         by: originalPost.item.by,
@@ -34,12 +30,10 @@ function completeOriginalPost(originalPost){
     return completePostObject;
 }
 
-
 /*
     Take an original list of posts, and convert it to a list of solely post objects,
     to be inserted into the database.
 */
-
 function completeOriginalPostList(originalCSList){
 
     const completePostList = [];
@@ -76,11 +70,9 @@ function completeOriginalPostList(originalCSList){
 
 }
 
-
 /*
     Complete an original comment to a format which can be inserted into the database.
 */
-
 function completeOriginalComment(originalComment){
     const completeCommentObject = {
         by: originalComment.item.by,
@@ -93,9 +85,7 @@ function completeOriginalComment(originalComment){
 }
 
 /*
-
     Complete an original list of comments into a final list to be inserted into the database.
-
 */
 function completeOriginalCommentList(originalCommentList){
     const completeCommentList = [];
@@ -216,7 +206,6 @@ async function completeUserProfile(scrapedUserObject){
     Take a given user pool retrieved in the original scraping pipeline,
     and convert it to a list of completed user profiles
 */
-
 async function completeListOfUserProfiles(originalUserPool){
     
     const userProfiles = [];
@@ -258,7 +247,9 @@ async function completeListOfUserProfiles(originalUserPool){
     };
 }
 
-
+/*
+    Recursively flatten a list of comments.
+*/
 function recFlattenComments(commentList){
     const children = commentList.filter(c => !c.error && c.item !== undefined && c.item?.childComments !== undefined).map(c => recFlattenComments(c.item.childComments)).flat(Infinity);
     return [...commentList, ...children];
@@ -323,8 +314,6 @@ function completeContentString(originalPost){
         contentStrings
     };
 }
-
-
 
 /*
     Utilities for completing an original dataset:

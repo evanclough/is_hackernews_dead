@@ -16,10 +16,8 @@ const hnAPIFunctions = require('./hnAPIFunctions');
     This is also not in the pipeline, as I want to save
     user data extraction for later, and I forgot about this originally.
 */
-
 async function grabUserFavorites(username){
     const favoritesUrl = `https://news.ycombinator.com/favorites?id=${username}`;
-
 
     const nameString = `Favorites for user ${username}`;
 
@@ -33,11 +31,8 @@ async function grabUserFavorites(username){
 }
 
 /*
-
     Read in the raw HTML file for a front page on a given date.
-
 */
-
 async function readFPHTMLFile(date){
     const dateString = utilities.getDateString(date);
     try {
@@ -50,10 +45,8 @@ async function readFPHTMLFile(date){
 }
 
 /*
-
     Convert the raw HTML of a front page for a given day 
     to a list of post IDs.
-
 */
 function grabPostIDsForFP(htmlString, date){
     const dateString = utilities.getDateString(date);
@@ -76,11 +69,8 @@ function grabPostIDsForFP(htmlString, date){
 }
 
 /*
-
-Get a list of post IDs from a date range of front pages.
-
+    Get a list of post IDs from a date range of front pages.
 */
-
 async function grabDateRangeOfFPPostIDs(startDate, endDate, writeToFile){
     
     const dateRange = utilities.getDateRange(startDate, endDate);
@@ -126,10 +116,8 @@ async function makeCurrentFPPostIDList(currentDate, datasetName, writeToFile){
 }
 
 /*
-
     Get all of the posts contained in a given list of front pages,
     represented by a list of post IDs
-
 */
 async function grabPostsForFP(postIDFPList, interval){
     const dateString = utilities.getDateString(postIDFPList.date);
@@ -177,10 +165,8 @@ async function grabPostsForFPList(postIDFPList, interval, datasetName, writeToFi
 }
 
 /*
-
     Recursively grab all comments for a given post,
     along with all users who've interacted on the post.
-
 */
 async function grabCommentsForPost(kidList, interval, depth){
     //retrieved comments from initial ID list
@@ -211,10 +197,8 @@ async function grabCommentsForPost(kidList, interval, depth){
 }
 
 /*
-
     Get all comments for all posts in a given front page, along with 
     a list of all unique usernames to be used later.
-
 */
 async function grabCommentsForFP(postsFP, interval){
 
@@ -253,12 +237,10 @@ async function grabCommentsForFP(postsFP, interval){
 
 
 /*
-
-Get all comments for all posts for a given list of front pages.
-The given front page list must contain post content.
-Also, retrieve a list of unique usernames who've either posted or commented
-on the list of front pages.
-
+    Get all comments for all posts for a given list of front pages.
+    The given front page list must contain post content.
+    Also, retrieve a list of unique usernames who've either posted or commented
+    on the list of front pages.
 */
 async function grabCommentsForFPList(postsFPList, interval, datasetName, writeToFile){
     const commentsFPList = {
@@ -283,10 +265,8 @@ async function grabCommentsForFPList(postsFPList, interval, datasetName, writeTo
 }
 
 /*
-
-Conglomerate all users who've interacted on each front page
-in a given list of front pages.
-
+    Conglomerate all users who've interacted on each front page
+    in a given list of front pages.
 */
 async function grabUsersForFPList(commentsFPList, interval, datasetName, writeToFile){
     console.log(`Grabbing users for ${datasetName}...`);
@@ -314,25 +294,19 @@ async function grabUsersForFPList(commentsFPList, interval, datasetName, writeTo
 
 /*
     Scrapes the content for a link associated with a Hacker News post.
-
-    TODO: I should really add some more filtering with these,
-    as of right now there's a lot of junk.
 */
-
 async function grabLinkContentForPost(url){
     return utilities.grabLinkContent(url);
 }
 
 /*
-
     Fetch the content present at the links for a given
     list of posts.
 
     There's a lot more that could be done here, 
     as of right now I'm just leaving the raw results from the 
-    get request, and a good amount of them error. 
+    get request (with cheerio), and a good amount of them error. 
     A lot of these may have to be done manually.
-
 */
 async function grabLinkContentForPostList(posts, interval){
     const postsWithLinkContent = [];
@@ -363,10 +337,8 @@ async function grabLinkContentForPostList(posts, interval){
 
 
 /*
-
     Go through a list of front pages,
     and fetch all content from links contained in posts.
-
 */
 async function grabLinkContentForFPList(postsFPList, interval, datasetName, writeToFile) {
     const linkContentFPList = {
@@ -397,7 +369,6 @@ async function grabLinkContentForFPList(postsFPList, interval, datasetName, writ
     Create an initial dataset from a final scraped JSON with a given name,
     and write it to the datasets directory.
 */
-
 async function createInitialDataset(finalScrapedJson, name){
     
     const frontPages = finalScrapedJson.frontPages;
@@ -424,10 +395,8 @@ async function createInitialDataset(finalScrapedJson, name){
 
 
 /*
-
     Run the full scraping pipeline on a given list of post IDs, 
     and write the final result to a dataset of a given name.
-
 */
 async function runFullPipeline(postIDFPList, intermediaryWrites, name){
     const postsFPList = await grabPostsForFPList(postIDFPList, 500, name, intermediaryWrites);
@@ -443,16 +412,13 @@ async function runFullPipeline(postIDFPList, intermediaryWrites, name){
 
 
 /*
-
     Run the full scraping pipeline for past front pages
     from a given start date to a given end date.
 
     TODO: This could be parallelized, the approach I took
     with doing each step for the entire range before 
     going to the next is unnecessary. But it'll do for now.
-
 */
-
 async function runFullPipelineOnPastFPs(startDate, endDate, intermediaryWrites){
     const dateRangeString = utilities.getDateRangeString(startDate, endDate);
 
@@ -469,12 +435,9 @@ async function runFullPipelineOnPastFPs(startDate, endDate, intermediaryWrites){
 }
 
 /*
-
     Run the full scraping pipeline on the current Hacker News Best Stories,
     given a name to write the dataset to.
-
 */
-
 async function runFullPipelineOnCurrentFP(intermediaryWrites){
     const currentTimestamp = new Date();
 
@@ -494,26 +457,6 @@ async function runFullPipelineOnCurrentFP(intermediaryWrites){
 
     await runFullPipeline(postIDFPList, intermediaryWrites, dateString);
 }
-
-async function main(){
-
-    const startDate = {
-        year: 2024,
-        month: 11, 
-        day: 8
-    };
-
-    const endDate = {
-        year: 2024, 
-        month: 11,
-        day: 9
-    };
-    
-    await runFullPipelineOnPastFPs(startDate, endDate, true);
-       
-}
-
-//main();
 
 module.exports = {
     runFullPipelineOnCurrentFP,

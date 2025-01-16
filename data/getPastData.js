@@ -30,16 +30,12 @@ async function main(){
         day: endDay
     };
 
-    // split into separate runs of four days at a time, 
-    //as more than that causes errors with the final json string
-    //being too long.
-    const k = 3;
+    const k = 2;
     const dateRanges = utilities.getDateRange(startDate, endDate).reduce((acc, date) => acc.length != 0 && acc[0].length < k ? [[...acc[0], date], ...acc.slice(1)] : [[date], ...acc], []);
 
     for(let i = 0; i < dateRanges.length; i++){
         await scrapeHN.runFullPipelineOnPastFPs(dateRanges[i][0], dateRanges[i][dateRanges[i].length - 1], false);
     }
-
 }
 
 main();

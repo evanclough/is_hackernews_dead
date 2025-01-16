@@ -11,12 +11,10 @@ const dbUtils = require("./dbUtils");
 const fs = require("fs").promises;
 
 /*
-
     Merge two datasets by combining the contents of their two databases,
     their username lists, and content string lists.
 
     The final name must not be equal to either of names of the datasets being merged.
-
 */
 async function mergeDatasets(leftDataset, rightDataset, finalName){
     if (leftDataset === finalName || rightDataset === finalName){
@@ -60,9 +58,7 @@ async function mergeDatasets(leftDataset, rightDataset, finalName){
 }
 
 /*
-
     Merge an array of completed datasets.
-
 */
 async function mergeDatasetList(completeDatasets, finalName){
     if (completeDatasets.length < 2){
@@ -92,9 +88,7 @@ async function mergeDatasetList(completeDatasets, finalName){
 }
 
 /*
-
     Merge all completed datasets stored in a given directory
-
 */
 async function mergeDirectory(dirName){
     const completeDatasetNames = await utilities.getDirectories(`./completeDatasets/${dirName}`);
@@ -109,17 +103,7 @@ async function mergeDirectory(dirName){
     await fs.copyFile(`./completeDatasets/${tempMergePath}/contentStringLists.json`, `./completeDatasets/${dirName}/contentStringLists.json`);
     await fs.copyFile(`./completeDatasets/${tempMergePath}/data.db`, `./completeDatasets/${dirName}/data.db`);
     await fs.rm(`./completeDatasets/${tempMergePath}`, { recursive: true, force: true });
-
 }
-
-
-async function main(){
-    console.log()
-
-    await mergeDirectory("2024-12-7to2024-12-8");
-}
-
-//main();
 
 module.exports = {
     mergeDirectory,

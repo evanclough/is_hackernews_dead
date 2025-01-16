@@ -1,5 +1,7 @@
 /*
+
     Functions used to call the official Hacker News API.
+
 */
 
 const axios = require('axios');
@@ -7,9 +9,7 @@ const axios = require('axios');
 const utilities = require('./utilities');
 
 /*
-
     Grabs an item from the official Hacker News API, given its ID.
-
 */
 async function grabItemFromAPI(ID){
     //fill in the API url with the id
@@ -17,6 +17,7 @@ async function grabItemFromAPI(ID){
     //make request, return response if error, log it
     try {
         const apiResponse = await axios.get(apiURL);
+
         return apiResponse.data;
     }catch(err){
         console.log(`Error in fetching item with ID ${ID}: ${err}`);
@@ -26,12 +27,11 @@ async function grabItemFromAPI(ID){
 }
 
 /*
-
     Grabs a list of items, given their IDs.
-
 */
 async function grabListOfItems(idList, interval){
     const items = [];
+
     for(let i = 0; i < idList.length; i++){
         try {
             const retrievedItem = await grabItemFromAPI(idList[i]);
@@ -41,15 +41,15 @@ async function grabListOfItems(idList, interval){
         }catch (err) {
             items.push({error: true, id: idList[i], item: {}});
         }
+
         await utilities.sleep(interval);
     }
+
     return items;
 }
 
 /*
-
     Grabs info on a given username.
-
 */
 async function grabUserFromAPI(username){
     const apiURL = `https://hacker-news.firebaseio.com/v0/user/${username}.json?print=pretty`;
@@ -65,31 +65,30 @@ async function grabUserFromAPI(username){
 }
 
 /*
-
     Grabs info on a list of users, given their usernames.
-
 */
 async function grabListOfUsers(usernameList, interval){
     const users = [];
     for(let i = 0; i < usernameList.length; i++){
         try {
             const retrievedUser = await grabUserFromAPI(usernameList[i]);
+
             console.log(`Grabbed user with username: ${usernameList[i]}`);
             console.log(`User ${i} of ${usernameList.length}\n`);
+
             users.push({error: false, username: usernameList[i], user: retrievedUser});
         }catch (err) {
             users.push({error: true, username: usernameList[i], user: {}});
         }
+        
         await utilities.sleep(interval);
     }
+
     return users;
 }
 
-
 /*
-
     Fetch the current stories, according to specified descriptor
-
 */
 
 async function grabCurrentStories(descriptor) {
