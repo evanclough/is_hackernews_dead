@@ -39,4 +39,6 @@ def train_model(dataset):
 if __name__ == "__main__":
     dataset_name = sys.argv[1]
     dataset = Dataset("test_dataset", sqlite_dataset_name=dataset_name)
-    run_model(dataset, 60, total_duration=60*60*24)
+    #dataset.initialize_for_run()
+    #dataset.get_all_current_feature_sets()
+    #run_model(dataset, 60, total_duration=60*60*24)
