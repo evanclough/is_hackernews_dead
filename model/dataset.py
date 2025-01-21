@@ -3,11 +3,13 @@
 """
 
 import datetime
+import json
 
 import utils
 import sqlite_db
 import user_pool
 import potential_responses
+import feature_extraction
 
 
 class Dataset:
@@ -65,6 +67,31 @@ class Dataset:
     def write_current_prf(self):
         current_prf = self.prf.get_current_prf()
         utils.write_json(current_prf, self.prf_path)
+
+    """
+        Print the profile of a given username.
+    """
+    def print_user_profile(self, username):
+        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
+        print(user_profile)
+
+    """
+        Print the contents of a potential response item, given its id.
+    """
+    def print_item(self, item_id):
+        item = self.prf.get_item(item_id)
+        item_contents = item.fetch_contents(self.sqlite_db)
+        print(item_contents)
+
+    """
+        Print the contents of a full branch of a potential response item, given its id.
+    """
+    def print_branch(self, item_id):
+        branch = self.prf.get_branch(item_id)
+        branch_content = [item.fetch_contents(self.sqlite_db) for item in branch]
+        print(f"Full branch of item {item_id}:")
+        for item_content in branch_content:
+            print(item_content)
 
     """
         Add a set of users to the dataset, given a list of attribute dicts.
@@ -321,3 +348,68 @@ class Dataset:
         print(f"Successfully got all current feature sets for time {self.current_time}.")
         print(f"Number of feature sets: {len(feature_sets)}")
         return feature_sets
+
+    """
+        Add to the misc json record for a given user profile in the user pool.
+    """
+    def add_misc_json_to_user_profile(self, username, dict_to_add):
+        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
+        
+        #TODO: originally put misc json in as an empty list. this is dumb
+        if isinstance(user_profile.misc_json, dict):
+            new_misc_json = {**user_profile.misc_json, **dict_to_add}
+        else:
+            new_misc_json = dict_to_add
+
+        update_dict = {"miscJson": json.dumps(new_misc_json)}
+        self.sqlite_db.update_user_profile(username, update_dict)
+
+    """
+        Add to the misc json record for a given item in the PRF.
+    """
+    def add_misc_json_to_item(self, item_id, dict_to_add):
+        item = self.prf.get_item(item_id)
+        item_contents = item.fetch_contents(self.sqlite_db)
+        
+        #TODO: originally put misc json in as an empty list. this is dumb
+        if isinstance(item_contents.misc_json, dict):
+            print(item_contents.misc_json)
+            new_misc_json = {**item_contents.misc_json, **dict_to_add}
+            print(new_misc_json)
+        else:
+            print("fuck")
+            new_misc_json = dict_to_add
+            
+        update_dict = {"miscJson": json.dumps(new_misc_json)}
+        if item.get_is_root():
+            self.sqlite_db.update_post_record(item_id, update_dict)
+        else:
+            self.sqlite_db.update_comment_record(item_id, update_dict)
+
+    """
+        Populate the text samples record for a given username in the user pool.
+    """
+    def populate_text_samples(self, username):
+        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
+        text_samples = feature_extraction.get_text_samples(user_profile, self.sqlite_db)
+        update_dict = {"textSamples": json.dumps(text_samples)}
+        self.sqlite_db.update_user_profile(username, update_dict)
+
+    """
+        Populate the beliefs record for a given user in the user pool.
+    """
+    def populate_beliefs(self, username):
+        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
+        beliefs = feature_extraction.get_beliefs(user_profile, self.sqlite_db)
+        update_dict = {"beliefs": json.dumps(beliefs)}
+        self.sqlite_db.update_user_profile(username, update_dict)
+
+    """
+        Populate the interests record for a given user in the user pool.
+    """
+    def populate_interests(self, username):
+        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
+        interests = feature_extraction.get_interests(user_profile, self.sqlite_db)
+        update_dict = {"interests": json.dumps(interests)}
+        self.sqlite_db.update_user_profile(username, update_dict)
+

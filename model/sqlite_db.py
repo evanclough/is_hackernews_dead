@@ -93,7 +93,7 @@ class SqliteDB:
         Run an update query on a given table
     """
     @_with_db
-    def _run_update_query(self, table, update_dict, item_to_update):
+    def _run_update_query(self, table, item_to_update, update_dict):
         update_att_str = functools.reduce(lambda acc, s: acc + s, [f"{att} = ?," for att in list(update_dict.keys())], "")[:-1]
 
         update_query = f"""
@@ -162,8 +162,7 @@ class SqliteDB:
         updated_post_ids = [*user_profile.post_ids, *post_ids]
         update_dict = {"postIDs": json.dumps(updated_post_ids)}
 
-        self._run_update_query("userProfiles", update_dict, username)
-
+        self._run_update_query("userProfiles",  username, update_dict)
 
     """
         Add a list of comment ids to a user's record.
@@ -173,7 +172,7 @@ class SqliteDB:
         updated_comment_ids = [*user_profile.comment_ids, *comment_ids]
         update_dict = {"commentIDs": json.dumps(updated_comment_ids)}
 
-        self._run_update_query("userProfiles", update_dict, username)
+        self._run_update_query("userProfiles", username, update_dict)
 
     """
         Remove a list of post ids from a user's record
@@ -183,7 +182,7 @@ class SqliteDB:
         updated_post_ids = [pid for pid in user_profile.post_ids if not (pid in post_ids)]
         update_dict = {"postIDs": json.dumps(updated_post_ids)}
 
-        self._run_update_query("userProfiles", update_dict, username)
+        self._run_update_query("userProfiles", username, update_dict)
 
     """
         Remove a list of comment ids from a user's record
@@ -193,7 +192,25 @@ class SqliteDB:
         updated_comment_ids = [cid for cid in user_profile.comment_ids if not (cid in comment_ids)]
         update_dict = {"commentIDs": json.dumps(updated_comment_ids)}
 
-        self._run_update_query("userProfiles", update_dict, username)
+        self._run_update_query("userProfiles", username, update_dict)
+
+    """
+        Update some entries in a given user profile, per an update dict.
+    """
+    def update_user_profile(self, username, update_dict):
+        self._run_update_query("userProfiles", username, update_dict)
+
+    """
+        Update some entries in a given post's record, per an update dict.
+    """
+    def update_post_record(self, post_id, update_dict):
+        self._run_update_query("posts", post_id, update_dict)
+
+    """
+        Update some entries in a given comment's record, per an update dict.
+    """
+    def update_comment_record(self, comment_id, update_dict):
+        self._run_update_query("comments", comment_id, update_dict)
 
     """
         Add a list of user profiles to the database,

@@ -16,6 +16,7 @@ class SqliteTests(unittest.TestCase):
         cls.dataset = dataset.Dataset("TEST", existing_dataset_name="CURRENT_TEST")
         cls.dataset.initialize_for_run()
         cls.insertion_num = 9999
+        cls.test_username = f"test_username{cls.insertion_num}"
         print(f"insertion number: {cls.insertion_num}")
 
     """
@@ -30,7 +31,7 @@ class SqliteTests(unittest.TestCase):
     """
     def test_new_user_insertion(self):
         user_dict = {
-            "username": f"test_username{self.insertion_num}",
+            "username": self.test_username,
             "about": "test about",
             "karma": 4,
             "created": "12354",
@@ -52,7 +53,7 @@ class SqliteTests(unittest.TestCase):
     def test_post_insertion(self):
 
         post_dict = {
-            "by": f"test_username{self.insertion_num}",
+            "by": self.test_username,
             "id": self.insertion_num,
             "time": str(int(time.time())),
             "text": "test post text",
@@ -71,7 +72,7 @@ class SqliteTests(unittest.TestCase):
     def test_comment_insertion_to_root(self):
 
         comment_dict = {
-            "by": f"test_username{self.insertion_num}",
+            "by": self.test_username,
             "id": self.insertion_num + 1,
             "time": str(int(time.time())),
             "text": "test text",
@@ -86,7 +87,7 @@ class SqliteTests(unittest.TestCase):
     """
     def test_comment_insertion_to_leaf(self):
         comment_dict = {
-            "by": f"test_username{self.insertion_num}",
+            "by": self.test_username,
             "id": self.insertion_num + 2,
             "time": str(int(time.time())),
             "text": "test text",
@@ -100,8 +101,7 @@ class SqliteTests(unittest.TestCase):
         Test removing a user from the dataset.
     """
     def test_user_removal(self):
-        username_to_remove = f"test_username{self.insertion_num}"
-        self.assertTrue(self.dataset.remove_users([username_to_remove]))
+        self.assertTrue(self.dataset.remove_users([self.test_username]))
 
     """
         Test removing a post from the dataset.
@@ -121,8 +121,7 @@ class SqliteTests(unittest.TestCase):
         Test removing a user from the dataset, and also removing all of their submissions.
     """
     def test_full_user_removal(self):
-        username_to_remove = f"test_username{self.insertion_num}"
-        self.assertTrue(self.dataset.remove_users([username_to_remove], remove_posts=True, remove_comments=True))
+        self.assertTrue(self.dataset.remove_users([self.test_username], remove_posts=True, remove_comments=True))
 
     """
         Test removing a post from the dataset, and also removing it from its author's profile.
@@ -155,6 +154,22 @@ class SqliteTests(unittest.TestCase):
         self.test_comment_removal()
         self.test_post_removal()
 
+    """
+        Test the addition of new features to a user.
+    """
+    def test_user_feature_insertion(self):
+        self.dataset.add_misc_json_to_user_profile(self.test_username, {"testasldkj": 234})
+        self.dataset.populate_text_samples(self.test_username)
+        self.dataset.populate_beliefs(self.test_username)
+        self.dataset.populate_interests(self.test_username)
+        self.dataset.print_user_profile(self.test_username)
+
+    """
+        Test the addition of new features to an item.
+    """
+    def test_item_feature_insertion(self):
+        self.dataset.add_misc_json_to_item(self.insertion_num + 1, {"test123": 124})
+        self.dataset.print_branch(self.insertion_num + 1)
 
 if __name__ == '__main__':
     unittest.main()

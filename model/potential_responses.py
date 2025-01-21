@@ -15,7 +15,21 @@ class PotentialResponseTree:
         self.kids = [PotentialResponseTree(kid_prt_dict) for kid_prt_dict in prt_dict["kids"]]
 
     def __str__(self):
-        return json.dumps(self.convert_to_dict(), indent=4)
+        num_descendants = len(self.get_flattened_descendants()) - 1
+
+        contents = f"""
+        PRT {self.id}
+            is {'' if self.is_root else 'not'} root
+            is {'' if self.active else 'not'} active
+            has {num_descendants} descendants
+        """
+        return contents
+
+    def print_kids(self):
+        contents = f"Kids of PRT {self.id}:\n"
+        for kid in self.kids:
+            contents += kid.get_id() + "\n"
+        return contents
 
     def activate(self):
         self.active = True
@@ -73,7 +87,6 @@ class PotentialResponseTree:
         else:
             return None
     
-
     """
         Get a flattened list of this node and all of its descendants.
     """
@@ -81,10 +94,20 @@ class PotentialResponseTree:
         return self.dfs(lambda c: [c["me"], *c["kids"]], reduce_kids_f=lambda acc, c: [*acc, *c], reduce_kids_acc=[])
 
     """
-        Remove a branch of this potential response tree, given an ID.
+        Get the full branch of an item in this potential response tree, given its id.
+        If not present, return None.
+    """
+    def get_branch(self, item_id):
+        f = lambda n: [n["me"]] if n["me"].get_id() == item_id else ([n["me"], *n["kids"]] if n["kids"] != None else None)
+        reduce_kids_f = lambda acc, n: (n if n != None else acc)
+        reduce_kids_acc = None
+        return self.dfs(f, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
+
+    """
+        Remove an item and all of its descendants this potential response tree, given an ID.
         If not present, or the ID is the root, return None.
     """
-    def remove_branch(self, item_id):
+    def remove_item_and_descendants(self, item_id):
         if self.check_contains_item(item_id) or self.get_id() == item_id:
             parent = self.get_parent_of_item(item_id)
             new_kids = [kid for kid in parent.get_kids() if kid.get_id() != item_id]
@@ -277,6 +300,19 @@ class PotentialResponseForest:
         return items
 
     """
+        Get the full branch of an item, given its id.
+        If not present, raise an error.
+    """
+    def get_branch(self, item_id):
+        if self.check_contains_item(item_id):
+            root_of_item = self.get_root_of_item(item_id)
+            branch = root_of_item.get_branch(item_id)
+            return branch
+        else:
+            raise PotentialResponseForestError(f"Error: Attempt to get branch of id {item_id} not present in forest.")
+
+
+    """
         Remove an item of a given id's branch  in one of the trees
         If it's not found, raise an error
     """
@@ -286,7 +322,7 @@ class PotentialResponseForest:
             if root_of_item.get_id() == item_id:
                 self.remove_root(item_id)
             else:
-                root_of_item.remove_branch(item_id)
+                root_of_item.remove_item_and_descendants(item_id)
         else:
             raise PotentialResponseForestError(f"Error: Attempt to remove item of id {item_id} not present in forest.")
 

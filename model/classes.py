@@ -8,8 +8,6 @@ import sqlite_db
 
 import datetime
 import json
-import operator
-import functools
 
 """
     A class to represent user profiles, to be used
@@ -58,18 +56,25 @@ class UserProfile:
         self.misc_json = raw_atts_dict["misc_json"]
 
     def __str__(self):
-        contents = "user:\n"
-        contents += f"""
-            username: {self.username}
+        contents = f"""
+        User Profile of {self.username}:
             about: {self.about}
             created: {self.created}
-            num posts: {len(self.post_ids)}
-            num comments: {len(self.comment_ids)}
-            text samples: {functools.reduce(lambda c, s: c + s, self.text_samples, '')}
-            interests: {functools.reduce(lambda c, s: c + s, self.interests, '')}
-            beliefs: {functools.reduce(lambda c, s: c + s, self.beliefs, '')}
+            user_class: {self.user_class}
         """
-        return str(f"user {self.username}")
+        contents += "\ttext samples:\n"
+        for text_sample in self.text_samples:
+            contents += text_sample + "\n"
+        contents += "\n\tinterests:\n"
+        for interest in self.interests:
+            contents += interest + "\n"
+        contents += "\n\tbeliefs:\n"
+        for belief in self.beliefs:
+            contents += belief + "\n"
+        contents += "\n\tmisc json:\n"
+        contents += json.dumps(self.misc_json)
+        
+        return contents
 
 
     """
@@ -121,7 +126,7 @@ class Post:
         self.text = sqlite_row[5]
         self.url = sqlite_row[6]
         self.url_content = sqlite_row[7]
-        self.misc_json = sqlite_row[8]
+        self.misc_json = json.loads(sqlite_row[8])
 
     """
         Initilaize the class from a raw atts dict.
@@ -138,12 +143,15 @@ class Post:
         self.misc_json = raw_atts_dict["misc_json"]
 
     def __str__(self):
-        contents = "post:\n"
-        contents += f"""
+        contents = f"""
+        Post {self.id}:
             id: {self.id}
             author: {self.by}
             title: {self.title}
             created: {datetime.datetime.fromtimestamp(self.time)}
+            text: {self.text}
+            url: {self.url}
+            misc json: {json.dumps(self.misc_json)}
         """
         return contents
 
@@ -187,7 +195,7 @@ class Comment:
         self.id = sqlite_row[1]
         self.time = int(sqlite_row[2])
         self.text = sqlite_row[3]
-        self.misc_json = sqlite_row[4]
+        self.misc_json = json.loads(sqlite_row[4])
 
     """
         Initilaize the class from a raw atts dict.
@@ -200,12 +208,12 @@ class Comment:
         self.misc_json = raw_atts_dict["misc_json"]
 
     def __str__(self):
-        contents = "comment:\n"
-        contents += f"""
-            id: {self.id}
+        contents = f"""
+        Comment {self.id}:
             author: {self.by}
             text: {self.text}
             created: {datetime.datetime.fromtimestamp(self.time)}
+            misc json: {json.dumps(self.misc_json)}
         """        
         return contents
 

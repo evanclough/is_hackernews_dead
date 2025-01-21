@@ -25,7 +25,16 @@ class UserPool:
         self.usernames = existing_username_list
 
     def __str__(self):
-        return f"user pool {self.name}"
+        contents =  f"""
+        User pool {self.name}:
+            Number of users: {len(self.usernames)}
+        """
+        return contents
+
+    def print_usernames(self):
+        contents = f"Usernames in user pool {self.name}"
+        for username in self.usernames:
+            contents += username + "\n"        
 
     def get_usernames(self):
         return self.usernames
