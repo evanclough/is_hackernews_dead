@@ -37,31 +37,25 @@ class UserPool:
         Get a user from this user pool of a given username.
         Raise an error if they're not present.
     """
-    def fetch_user_profile(self, username, sqlite_db=None):
+    def fetch_user_profile(self, username, sqlite_db):
         if self.check_contains_user(username):
-            user_profile = {
-                "body": None
-            }
-            if sqlite_db != None:
-                user_profile["body"] = sqlite_db.get_user_profile(username)
-            
-            return user_profile
+            return sqlite_db.get_user_profile(username)
         else:
             raise UserPoolError(f"Error: attempt to get user of username {username} not present in the user pool.")
 
     """
         Fetch the profile of a list of users, given their usernames.
     """
-    def fetch_some_user_profiles(self, username_list, sqlite_db=None):
-        user_profiles = [self.fetch_user_profile(username, sqlite_db=sqlite_db) for username in username_list]
+    def fetch_some_user_profiles(self, username_list, sqlite_db):
+        user_profiles = [self.fetch_user_profile(username, sqlite_db) for username in username_list]
 
         return user_profiles
 
     """
         Fetch the profiles of all users in the user pool.
     """
-    def fetch_all_user_profiles(self, sqlite_db=None):
-        return self.fetch_some_user_profiles(self.usernames, sqlite_db=sqlite_db)
+    def fetch_all_user_profiles(self, sqlite_db):
+        return self.fetch_some_user_profiles(self.usernames, sqlite_db)
 
     """
         Check if this user pool contains a user with a given username.
@@ -95,7 +89,7 @@ class UserPool:
         who fail.
     """
     def clean(self, sqlite_db):
-        user_profiles = self.fetch_all_user_profiles(sqlite_db=sqlite_db)
-        clean_usernames = [user_profile["body"].username for user_profile in user_profiles if user_profile["body"].check(sqlite_db)]
+        user_profiles = self.fetch_all_user_profiles(sqlite_db)
+        clean_usernames = [user_profile.username for user_profile in user_profiles if user_profile.check(sqlite_db)]
         self.usernames = clean_usernames
     

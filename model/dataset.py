@@ -91,17 +91,16 @@ class Dataset:
     """
     def remove_users(self, username_list, remove_posts=False, remove_comments=False):
         try:
-            user_profiles = self.user_pool.fetch_some_user_profiles(username_list, sqlite_db=self.sqlite_db)
+            user_profiles = self.user_pool.fetch_some_user_profiles(username_list, self.sqlite_db)
 
             if remove_posts:
                 for user_profile in user_profiles:
-                    post_ids = user_profile["body"].post_ids
+                    post_ids = user_profile.post_ids
                     self.remove_root_posts(post_ids)
             if remove_comments:
                 for user_profile in user_profiles:
-                    comment_ids = user_profile["body"].comment_ids
+                    comment_ids = user_profile.comment_ids
                     self.remove_leaf_comments(comment_ids)
-
 
             self.sqlite_db.remove_items("userProfiles", username_list)
 
@@ -151,7 +150,7 @@ class Dataset:
             all_kid_ids = []
             for post_id in post_ids:
                 post = self.prf.get_item(post_id)
-                kids = post["self"].get_kids()
+                kids = post.get_kids()
                 kid_ids = [kid.get_id() for kid in kids]
                 all_kid_ids = [*all_kid_ids, *kid_ids]
             self.remove_leaf_comments(all_kid_ids, update_author_profile=update_author_profile)
@@ -159,8 +158,9 @@ class Dataset:
             if update_author_profile:
                 author_post_map = {}
                 for post_id in post_ids:
-                    post = self.prf.get_item(post_id, sqlite_db=self.sqlite_db)
-                    author_username = post["body"].by
+                    post = self.prf.get_item(post_id)
+                    post_contents = post.fetch_contents(self.sqlite_db)
+                    author_username = post_contents.by
                     if author_username in author_post_map:
                         author_post_map[author_username].append(post_id)
                     else:
@@ -193,7 +193,7 @@ class Dataset:
         try:
             for leaf_dict in leaf_dict_list:
                 parent_id = leaf_dict["parent_id"]
-                parent = self.prf.get_item(parent_id)["self"]
+                parent = self.prf.get_item(parent_id)
                 parent.add_kid(leaf_dict["id"])
             self.sqlite_db.insert_comments(leaf_dict_list)
             self.write_current_prf()
@@ -214,7 +214,7 @@ class Dataset:
     """
     def remove_leaf_comments(self, comment_ids, update_author_profile=False):
         try:
-            all_comment_ids_to_remove = []
+            all_comments_to_remove = []
 
             for comment_id in comment_ids:
                 try:
@@ -222,30 +222,26 @@ class Dataset:
                 except potential_responses.PotentialResponseForestError as e:
                     print(f"Attempted to remove comment with id {comment_id} which does not exist in potential response forest. Skipping...")
                     continue
-                comment_and_descendants = [dec["self"].get_id() for dec in comment["self"].get_flattened_descendants()]
-                all_comment_ids_to_remove = [*all_comment_ids_to_remove, *comment_and_descendants]
+                comment_and_descendants = [dec for dec in comment.get_flattened_descendants()]
+                all_comments_to_remove = [*all_comments_to_remove, *comment_and_descendants]
             
             if update_author_profile:
-                all_comment_bodies_to_remove = []
-
-                for comment_id in comment_ids:
-                    comment = self.prf.get_item(comment_id)
-                    comment_and_descendants = [dec["body"] for dec in comment["self"].get_flattened_descendants(sqlite_db=self.sqlite_db)]
-                    all_comment_bodies_to_remove = [*all_comment_bodies_to_remove, *comment_and_descendants]
+                comment_contents = [comment.fetch_contents(self.sqlite_db) for comment in all_comments_to_remove]
 
                 author_comment_map = {}
 
-                for comment_body in all_comment_bodies_to_remove:
-                    author_username = comment_body.by
+                for comment in comment_contents:
+                    author_username = comment.by
                     if author_username in author_comment_map:
-                        author_comment_map[author_username].append(comment_body.id)
+                        author_comment_map[author_username].append(comment.id)
                     else:
-                        author_comment_map[author_username] = [comment_body.id]
+                        author_comment_map[author_username] = [comment.id]
                 
                 for username, user_comment_ids in author_comment_map.items():
                     unique_comment_ids = list(set(user_comment_ids))
                     self.sqlite_db.remove_comment_ids_from_user(username, unique_comment_ids)
 
+            all_comment_ids_to_remove = [comment.get_id() for comment in all_comments_to_remove]
             unique_comment_ids_to_remove = list(set(all_comment_ids_to_remove))
             self.sqlite_db.remove_items("comments", unique_comment_ids_to_remove)
 
@@ -308,10 +304,11 @@ class Dataset:
         print(f"Activating potential response items prior to that time...")
         self.prf.activate_before_time(self.sqlite_db, self.current_time)
 
-        users = self.user_pool.fetch_all_user_profiles(sqlite_db=self.sqlite_db)
+        users = self.user_pool.fetch_all_user_profiles(sqlite_db)
         print(f"Number of users: {len(users)}")
 
-        all_pr_branches = self.prf.get_all_active_branches(sqlite_db=self.sqlite_db)
+        all_pr_branches = self.prf.get_all_active_branches()
+
         print(f"Number of potential response branches: {len(all_pr_branches)}")
 
         feature_sets = []

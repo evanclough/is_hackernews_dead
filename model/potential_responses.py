@@ -42,7 +42,7 @@ class PotentialResponseTree:
         Check if an item of a given id is present in this tree
     """
     def check_contains_item(self, item_id):
-        f = lambda n: n["me"]["self"].get_id() == item_id or n["kids"]
+        f = lambda n: n["me"].get_id() == item_id or n["kids"]
         reduce_kids_f = lambda acc, n: n or acc
         reduce_kids_acc = False
         return self.dfs(f, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
@@ -51,12 +51,12 @@ class PotentialResponseTree:
         Get a member item of this tree, given its id.
         If not present, return None.
     """
-    def get_item(self, item_id, sqlite_db=None):
+    def get_item(self, item_id):
         if self.check_contains_item(item_id):
-            f = lambda n: n["me"] if n["me"]["self"].get_id() == item_id else n["kids"]
+            f = lambda n: n["me"] if n["me"].get_id() == item_id else n["kids"]
             reduce_kids_f = lambda acc, n: n if n != None else acc
             reduce_kids_acc = None
-            return self.dfs(f, sqlite_db=sqlite_db, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
+            return self.dfs(f, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
         else:
             return None
 
@@ -64,12 +64,12 @@ class PotentialResponseTree:
         Get the parent of a given id in this tree.
         If not present, return None.
     """
-    def get_parent_of_item(self, child_id, sqlite_db=None):
+    def get_parent_of_item(self, child_id):
         if self.check_contains_item(child_id):
-            f = lambda n: n["me"] if (child_id in [kid.get_id() for kid in n["me"]["self"].kids]) else n["kids"]
+            f = lambda n: n["me"] if (child_id in [kid.get_id() for kid in n["me"].get_kids()]) else n["kids"]
             reduce_kids_f = lambda acc, n: n if n != None else acc
             reduce_kids_acc = None
-            return self.dfs(f, sqlite_db=sqlite_db, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
+            return self.dfs(f, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
         else:
             return None
     
@@ -77,8 +77,8 @@ class PotentialResponseTree:
     """
         Get a flattened list of this node and all of its descendants.
     """
-    def get_flattened_descendants(self, sqlite_db=None):
-        return self.dfs(lambda c: [c["me"], *c["kids"]], sqlite_db=sqlite_db, reduce_kids_f=lambda acc, c: [*acc, *c], reduce_kids_acc=[])
+    def get_flattened_descendants(self):
+        return self.dfs(lambda c: [c["me"], *c["kids"]], reduce_kids_f=lambda acc, c: [*acc, *c], reduce_kids_acc=[])
 
     """
         Remove a branch of this potential response tree, given an ID.
@@ -86,11 +86,9 @@ class PotentialResponseTree:
     """
     def remove_branch(self, item_id):
         if self.check_contains_item(item_id) or self.get_id() == item_id:
-            parent = self.get_parent_of_item(item_id)["self"]
-            print(len(parent.get_kids()))
+            parent = self.get_parent_of_item(item_id)
             new_kids = [kid for kid in parent.get_kids() if kid.get_id() != item_id]
             parent.set_kids(new_kids)
-            print(len(parent.get_kids()))
         else:
             return None
 
@@ -112,26 +110,12 @@ class PotentialResponseTree:
         self.set_kids(new_kids)
 
     """
-        Fetch the full contents of this leaf
-        returns data from all current data sources, and 
-        self to allow modification.
-
-        TODO: fix, this can't be good
+        Fetch the full contents of this leaf.
     """
-    def fetch_contents(self, sqlite_db=None):
-        if sqlite_db == None:
-            body = None
-        else:
-            if self.is_root:
-                body = sqlite_db.get_post(self.id)
-            else:
-                body = sqlite_db.get_comment(self.id)
-
-        return {
-            "body": body,
-            "self": self
-        }
-
+    def fetch_contents(self, sqlite_db):
+        contents = sqlite_db.get_post(self.id) if self.is_root else sqlite_db.get_comment(self.id)
+        return contents
+        
 
     """
         Check all items in this tree
@@ -141,8 +125,8 @@ class PotentialResponseTree:
     """
     def clean(self, sqlite_db):
         try:
-            contents = self.fetch_contents(sqlite_db=sqlite_db)
-            if contents["body"].check(sqlite_db):
+            contents = self.fetch_contents(sqlite_db)
+            if contents.check(sqlite_db):
                 clean_kids = [kid for kid in self.kids if kid.clean(sqlite_db)]
                 self.kids = clean_kids
                 return True
@@ -158,34 +142,30 @@ class PotentialResponseTree:
         Convert back to the original dict form.
     """
     def convert_to_dict(self):
-        return self.dfs(lambda c: {"id": c["me"]["self"].id, "kids": c["kids"]}, reduce_kids_f=lambda acc, c: [*acc, c], reduce_kids_acc=[])
+        return self.dfs(lambda c: {"id": c["me"].get_id(), "kids": c["kids"]}, reduce_kids_f=lambda acc, c: [*acc, c], reduce_kids_acc=[])
 
     """
         Iterate through this potential response tree via a DFS.
         Many options provided.
     """
-    def dfs(self, f, sqlite_db=None ,store_parents=False, parents=[], filter_f=None, reduce_kids_f=None, reduce_kids_acc=None,depth=0):
-        contents = self.fetch_contents(sqlite_db=sqlite_db)
+    def dfs(self, f, sqlite_db=None, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None, depth=0):
 
         f_inp = {
-            "me": contents,
-            "parents": None,
+            "me": self,
+            "contents": None,
             "kids": None,
             "depth": depth
         }
 
-        if store_parents:
-            f_inp["parents"] = parents
-            new_parents = [parent for parent in parents]
-            new_parents.append(contents)
-            parents = new_parents
+        if sqlite_db != None:
+            f_inp["contents"] = self.fetch_contents(sqlite_db=sqlite_db)
 
         if filter_f != None:
             filter_res = filter_f(f_inp)
             if filter_res == False:
                 return None
 
-        kid_results = [kid.dfs(f, sqlite_db=sqlite_db, store_parents=store_parents, parents=parents, filter_f=filter_f, reduce_kids_f=reduce_kids_f,reduce_kids_acc=reduce_kids_acc,depth=depth+1) for kid in self.kids] 
+        kid_results = [kid.dfs(f, sqlite_db=sqlite_db, filter_f=filter_f, reduce_kids_f=reduce_kids_f,reduce_kids_acc=reduce_kids_acc, depth=depth+1) for kid in self.kids] 
 
         if reduce_kids_f != None:
             reduced = functools.reduce(reduce_kids_f, kid_results, reduce_kids_acc)
@@ -198,16 +178,16 @@ class PotentialResponseTree:
     """
     def activate_before_time(self, sqlite_db, time):
 
-        filter_f = lambda c: c["me"]["body"].time < time if c["me"]["body"] != None else False
-        activate = lambda c: c["me"]["self"].activate()
+        filter_f = lambda c: c["contents"].time < time if c["contents"] != None else False
+        activate = lambda c: c["me"].activate()
         self.dfs(activate, sqlite_db=sqlite_db, filter_f=filter_f)
 
     """
         Recursively retrieve a list of all active branches in this potential response tree
     """
-    def get_all_active_branches(self, sqlite_db=None):
+    def get_all_active_branches(self):
         
-        filter_f = lambda c: c["me"]["self"].is_active()
+        filter_f = lambda c: c["me"].is_active()
 
         reduce_kids_f = lambda acc, c: acc if c == None else [*acc, *c]
 
@@ -215,7 +195,7 @@ class PotentialResponseTree:
 
         f = lambda c: [*[[c["me"]] + kid for kid in c["kids"]], [c["me"]]]
         
-        return self.dfs(f, sqlite_db=sqlite_db, filter_f=filter_f, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
+        return self.dfs(f, filter_f=filter_f, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
 
 
 """
@@ -281,10 +261,10 @@ class PotentialResponseForest:
     """
         Get an item's node if it exists among member trees, otherwise, raise an error.
     """
-    def get_item(self, item_id, sqlite_db=None):
+    def get_item(self, item_id):
         if self.check_contains_item(item_id):
             root_of_item = self.get_root_of_item(item_id)
-            item = root_of_item.get_item(item_id, sqlite_db=sqlite_db)
+            item = root_of_item.get_item(item_id)
             return item
         else:
             raise PotentialResponseForestError(f"Error: Attempt to get item of id {item_id} not present in forest.")
@@ -292,8 +272,8 @@ class PotentialResponseForest:
     """
         Get a list of items.
     """
-    def get_items(self, item_ids, sqlite_db=None):
-        items = [self.get_item(item_id, sqlite_db=sqlite_db) for item_id in item_ids]
+    def get_items(self, item_ids):
+        items = [self.get_item(item_id) for item_id in item_ids]
         return items
 
     """
@@ -370,7 +350,7 @@ class PotentialResponseForest:
         Get a list of timestamps for all roots.
     """
     def get_root_times(self, sqlite_db):
-        root_times = [root.fetch_contents(sqlite_db)["body"].time for root in self.roots]
+        root_times = [root.fetch_contents(sqlite_db).time for root in self.roots]
         return root_times
 
     """
