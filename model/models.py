@@ -5,7 +5,7 @@ Train the when model on a given dataset
 import sys
 
 import utils
-from classes import Dataset
+import dataset
 
 def when(feature_set):
     model = lambda f: True
@@ -32,13 +32,9 @@ def run_model(dataset, interval, total_duration=None):
                 #add response to dataset
         dataset.advance_current_time(interval)
 
-
-def train_model(dataset):
-    return -1
-
 if __name__ == "__main__":
     dataset_name = sys.argv[1]
-    dataset = Dataset("test_dataset", sqlite_dataset_name=dataset_name)
-    #dataset.initialize_for_run()
-    #dataset.get_all_current_feature_sets()
-    #run_model(dataset, 60, total_duration=60*60*24)
+    dataset = dataset.Dataset("test_dataset", existing_dataset_name=dataset_name)
+    dataset.initialize_for_run()
+    dataset.get_all_current_feature_sets()
+    run_model(dataset, 60, total_duration=60*60*24)
