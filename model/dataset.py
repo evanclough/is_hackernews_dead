@@ -5,41 +5,113 @@
 import datetime
 import json
 
+from openai import OpenAI
+
 import utils
 import sqlite_db
+import chroma_db
 import user_pool
 import potential_responses
 import feature_extraction
 
+"""
+    An exception class for general dataset errors.
+"""
+class DatasetError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
 
 class Dataset:
-    def __init__(self, name, existing_dataset_name=None):
+    def __init__(self, name, existing_dataset_name=None, create_chroma=False, use_openai_client=False, override_featurex_defaults=None):
+        utils.load_env()
+
         self.name = name
+        self.root_dataset_path = utils.fetch_env_var("ROOT_DATASET_PATH")
+
+        if use_openai_client:
+            self.openai_client = OpenAI()
         if existing_dataset_name != None:
-            self._init_from_existing(existing_dataset_name)
+            self._init_from_existing(existing_dataset_name, create_chroma=create_chroma)
+        else:
+            self._init_from_scratch()
+
+        self._num_text_samples = 5
+        self._num_beliefs = 5
+        self._belief_char_max = 200
+        self._num_interests = 5
+        self._skip_sub_ret_errors = False
+
+        if override_featurex_defaults != None:
+            if "num_text_samples" in override_featurex_defaults: 
+                self._num_text_samples = override_featurex_defaults["num_text_samples"]
+            if "num_beliefs" in override_featurex_defaults:
+                self._num_beliefs = override_featurex_defaults["num_beliefs"]
+            if "belief_char_max" in override_featurex_defaults:
+                self._belief_char_max = override_featurex_defaults["belief_char_max"]
+            if "num_interests" in override_featurex_defaults:
+                self._num_interests = override_featurex_defaults["num_interests"]
+            if "skip_sub_ret_errors" in  override_featurex_defaults:
+                self._skip_sub_ret_errors = override_featurex_defaults["skip_sub_ret_errors"]
     
     """
         Initialize from an existing dataset in the format produced in the data module.
     """
-    def _init_from_existing(self, existing_dataset_name):
-        root_dataset_path = utils.fetch_env_var("ROOT_DATASET_PATH")
-        self.dataset_path = root_dataset_path + existing_dataset_name + "/"
-        self.db_path = self.dataset_path + "data.db"
+    def _init_from_existing(self, existing_dataset_name, create_chroma=False):
+        self.dataset_path = self.root_dataset_path + existing_dataset_name + "/"
+        print(f"Initializing dataset {self.name} from existing dataset at {self.dataset_path}...")
+
+        self.sqlite_db_path = self.dataset_path + "data.db"
+        self.sqlite_db = sqlite_db.SqliteDB(self.sqlite_db_path)
+
+        self.chroma_db_path = self.dataset_path + ".chroma"
+        self.chroma_db = chroma_db.ChromaDB(self.chroma_db_path, create=create_chroma)
+
         self.username_list_path = self.dataset_path  + "usernames.json"
-        self.prf_path = self.dataset_path  + "contentStringLists.json"
-
-        self.sqlite_db = sqlite_db.SqliteDB(self.db_path)
-
-
         usernames = utils.read_json(self.username_list_path)
-        prf = utils.read_json(self.prf_path)
+        self.user_pool = user_pool.UserPool(self.name, usernames)
 
-        self.user_pool = user_pool.UserPool(self.name, existing_username_list=usernames)
-        self.prf = potential_responses.PotentialResponseForest(self.name, existing_prf=prf)
+        self.prf_path = self.dataset_path  + "contentStringLists.json"
+        prf = utils.read_json(self.prf_path)
+        self.prf = potential_responses.PotentialResponseForest(self.name, prf)
+
+        print(f"Successfully initialized dataset {self.name} from existing dataset at {self.dataset_path}.")
+
+    """
+        Initialize a new dataset from scratch, with the given name.
+    """
+    def _init_from_scratch(self):
+        self.dataset_path = self.root_dataset_path + self.name + "/"
+
+        if utils.check_directory_exists(self.dataset_path):
+            raise DatasetError(f"Error: Attempted to create dataset from scratch, at existing directory path {self.dataset_path}.")
+
+        print(f"Initializing new dataset {self.name} at {self.dataset_path}...")
+
+        utils.create_directory(self.dataset_path)
+
+        empty_prf = []
+
+        self.sqlite_db_path = self.dataset_path + "data.db"
+        self.sqlite_db = sqlite_db.SqliteDB(self.sqlite_db_path, create=True)
+
+        self.chroma_db_path = self.dataset_path + ".chroma"
+        self.chroma_db = chroma_db.ChromaDB(self.chroma_db_path, create=True)
+
+        self.username_list_path = self.dataset_path + "usernames.json"
+        utils.write_json([], self.username_list_path)
+        self.user_pool = user_pool.UserPool(self.name, [])
+
+        self.prf_path = self.dataset_path + "contentStringLists.json"
+        utils.write_json([], self.prf_path)
+        self.prf = potential_responses.PotentialResponseForest(self.name, [])
+
+        print(f"Successfully initialized new dataset {self.name} at {self.dataset_path}.")
 
     def __str__(self):
         return f"""
-            dataset {self.name}
+            Dataset {self.name}
+            {self.user_pool}
+            {self.prf}
         """
 
     def get_name(self):
@@ -72,7 +144,7 @@ class Dataset:
         Print the profile of a given username.
     """
     def print_user_profile(self, username):
-        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
+        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db, chroma_db=self.chroma_db)
         print(user_profile)
 
     """
@@ -80,7 +152,7 @@ class Dataset:
     """
     def print_item(self, item_id):
         item = self.prf.get_item(item_id)
-        item_contents = item.fetch_contents(self.sqlite_db)
+        item_contents = item.fetch_contents(sqlite_db=self.sqlite_db)
         print(item_contents)
 
     """
@@ -88,7 +160,7 @@ class Dataset:
     """
     def print_branch(self, item_id):
         branch = self.prf.get_branch(item_id)
-        branch_content = [item.fetch_contents(self.sqlite_db) for item in branch]
+        branch_content = [item.fetch_contents(sqlite_db=self.sqlite_db) for item in branch]
         print(f"Full branch of item {item_id}:")
         for item_content in branch_content:
             print(item_content)
@@ -186,7 +258,7 @@ class Dataset:
                 author_post_map = {}
                 for post_id in post_ids:
                     post = self.prf.get_item(post_id)
-                    post_contents = post.fetch_contents(self.sqlite_db)
+                    post_contents = post.fetch_contents(sqlite_db=self.sqlite_db)
                     author_username = post_contents.by
                     if author_username in author_post_map:
                         author_post_map[author_username].append(post_id)
@@ -253,7 +325,7 @@ class Dataset:
                 all_comments_to_remove = [*all_comments_to_remove, *comment_and_descendants]
             
             if update_author_profile:
-                comment_contents = [comment.fetch_contents(self.sqlite_db) for comment in all_comments_to_remove]
+                comment_contents = [comment.fetch_contents(sqlite_db=self.sqlite_db) for comment in all_comments_to_remove]
 
                 author_comment_map = {}
 
@@ -309,7 +381,12 @@ class Dataset:
         if initial_time == None:
             print("Finding initial time...")
             root_post_times = self.prf.get_root_times(self.sqlite_db)
-            latest_time = max(root_post_times)
+            try:
+                latest_time = max(root_post_times)
+            except ValueError as e:
+                print("Error finding latest time among current roots, they are likely empty.")
+                print("This dataset is not ready for a run. Returning...")
+                return
             self.initial_time = latest_time + 1
         else:
             print("Initial time has been given.")
@@ -353,7 +430,7 @@ class Dataset:
         Add to the misc json record for a given user profile in the user pool.
     """
     def add_misc_json_to_user_profile(self, username, dict_to_add):
-        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
+        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db)
         
         #TODO: originally put misc json in as an empty list. this is dumb
         if isinstance(user_profile.misc_json, dict):
@@ -369,7 +446,7 @@ class Dataset:
     """
     def add_misc_json_to_item(self, item_id, dict_to_add):
         item = self.prf.get_item(item_id)
-        item_contents = item.fetch_contents(self.sqlite_db)
+        item_contents = item.fetch_contents(sqlite_db=self.sqlite_db)
         
         #TODO: originally put misc json in as an empty list. this is dumb
         if isinstance(item_contents.misc_json, dict):
@@ -387,11 +464,19 @@ class Dataset:
             self.sqlite_db.update_comment_record(item_id, update_dict)
 
     """
+        Store embeddings for a given item in this dataset's potential response forest
+        to store in chroma db.
+    """
+    def store_embeddings_for_item(self, item_id):
+        item = self.prf.get_item(item_id)
+        item_contents = item.fetch_contents(sqlite_db=self.sqlite_db)
+
+    """
         Populate the text samples record for a given username in the user pool.
     """
     def populate_text_samples(self, username):
-        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
-        text_samples = feature_extraction.get_text_samples(user_profile, self.sqlite_db)
+        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db)
+        text_samples = feature_extraction.get_text_samples(user_profile, self.sqlite_db, self._num_text_samples, self.openai_client, skip_sub_ret_errors=self._skip_sub_ret_errors)
         update_dict = {"textSamples": json.dumps(text_samples)}
         self.sqlite_db.update_user_profile(username, update_dict)
 
@@ -399,8 +484,9 @@ class Dataset:
         Populate the beliefs record for a given user in the user pool.
     """
     def populate_beliefs(self, username):
-        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
-        beliefs = feature_extraction.get_beliefs(user_profile, self.sqlite_db)
+        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db)
+        beliefs = feature_extraction.get_beliefs(user_profile, self.sqlite_db, self._num_beliefs, self._belief_char_max, self.openai_client, skip_sub_ret_errors=self._skip_sub_ret_errors)
+        print(beliefs)
         update_dict = {"beliefs": json.dumps(beliefs)}
         self.sqlite_db.update_user_profile(username, update_dict)
 
@@ -408,8 +494,9 @@ class Dataset:
         Populate the interests record for a given user in the user pool.
     """
     def populate_interests(self, username):
-        user_profile = self.user_pool.fetch_user_profile(username, self.sqlite_db)
-        interests = feature_extraction.get_interests(user_profile, self.sqlite_db)
+        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db)
+        interests = feature_extraction.get_interests(user_profile, self.sqlite_db, self._num_interests, self.openai_client, skip_sub_ret_errors=self._skip_sub_ret_errors)
+        print(interests)
         update_dict = {"interests": json.dumps(interests)}
         self.sqlite_db.update_user_profile(username, update_dict)
 

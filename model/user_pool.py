@@ -3,6 +3,8 @@
     its users.
 """
 
+import classes
+
 """
     An exception class for all user pool related errors.
 """
@@ -11,18 +13,10 @@ class UserPoolError(Exception):
         super().__init__(message)
 
 class UserPool:
-    def __init__(self, name, existing_username_list=None):
+    def __init__(self, name, username_list):
         self.name = name
         self.active = False
-        if existing_username_list != None:
-            self._init_from_existing(existing_username_list)
-
-    """
-        Initialize, given a username list from an existing dataset in the format 
-        from the data module.
-    """
-    def _init_from_existing(self, existing_username_list):
-        self.usernames = existing_username_list
+        self.usernames = username_list
 
     def __str__(self):
         contents =  f"""
@@ -43,28 +37,28 @@ class UserPool:
         self.usernames = usernames
 
     """
-        Get a user from this user pool of a given username.
+        Get a user from this user pool of a given username, with given data sources.
         Raise an error if they're not present.
     """
-    def fetch_user_profile(self, username, sqlite_db):
+    def fetch_user_profile(self, username, sqlite_db=None, chroma_db=None):
         if self.check_contains_user(username):
-            return sqlite_db.get_user_profile(username)
+            return classes.UserProfile(username, sqlite_db=sqlite_db, chroma_db=chroma_db)
         else:
             raise UserPoolError(f"Error: attempt to get user of username {username} not present in the user pool.")
 
     """
         Fetch the profile of a list of users, given their usernames.
     """
-    def fetch_some_user_profiles(self, username_list, sqlite_db):
-        user_profiles = [self.fetch_user_profile(username, sqlite_db) for username in username_list]
+    def fetch_some_user_profiles(self, username_list, sqlite_db=None, chroma_db=None):
+        user_profiles = [self.fetch_user_profile(username, sqlite_db=sqlite_db, chroma_db=chroma_db) for username in username_list]
 
         return user_profiles
 
     """
         Fetch the profiles of all users in the user pool.
     """
-    def fetch_all_user_profiles(self, sqlite_db):
-        return self.fetch_some_user_profiles(self.usernames, sqlite_db)
+    def fetch_all_user_profiles(self, sqlite_db=None, chroma_db=None):
+        return self.fetch_some_user_profiles(self.usernames, sqlite_db=sqlite_db, chroma_db=chroma_db)
 
     """
         Check if this user pool contains a user with a given username.

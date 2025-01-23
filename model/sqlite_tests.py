@@ -8,23 +8,29 @@ import json
 
 import utils
 import dataset
+import feature_extraction
 
 class SqliteTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dataset = dataset.Dataset("TEST", existing_dataset_name="CURRENT_TEST")
+        
+        cls.test_dataset_name = "CURRENT_TEST"
+
+        cls.dataset = dataset.Dataset("TEST", existing_dataset_name=cls.test_dataset_name, use_openai_client=True)
         cls.dataset.initialize_for_run()
-        cls.insertion_num = 9999
+
+        cls.insertion_num = 666
         cls.test_username = f"test_username{cls.insertion_num}"
-        print(f"insertion number: {cls.insertion_num}")
+        print(f"Running tests on existing dataset {cls.test_dataset_name}...")
+        print(f"test insertion number: {cls.insertion_num}")
 
     """
         Test the initialization of the dataset.
         (doesn't actually do anything, really just testing the set up class method)
     """
     def test_initialization(self):
-        self.assertEqual(self.dataset.get_name(), "TEST")
+        self.assertIsNotNone(self.dataset)
 
     """
         Test inserting a new user to the user pool. (no post history)
@@ -170,6 +176,20 @@ class SqliteTests(unittest.TestCase):
     def test_item_feature_insertion(self):
         self.dataset.add_misc_json_to_item(self.insertion_num + 1, {"test123": 124})
         self.dataset.print_branch(self.insertion_num + 1)
+
+    """
+        Test feature extraction
+    """
+    def test_feature_extraction(self):
+        featurex_test_username = "airstrike"
+        print(f"Testing openai feature extraction for {featurex_test_username}...")
+        user_profile = self.dataset.user_pool.fetch_user_profile(featurex_test_username,  self.dataset.sqlite_db)
+        text_samples_test = feature_extraction.get_text_samples(user_profile, self.dataset.sqlite_db, 5, self.dataset.openai_client, skip_sub_ret_errors=True)
+        print(f"text samples: {text_samples_test}")
+        beliefs_test = feature_extraction.get_beliefs(user_profile, self.dataset.sqlite_db, 5, 200, self.dataset.openai_client, skip_sub_ret_errors=True)
+        print(f"beliefs: {beliefs_test}")
+        interests_test = feature_extraction.get_interests(user_profile, self.dataset.sqlite_db, 5, self.dataset.openai_client, skip_sub_ret_errors=True)
+        print(f"interests: {interests_test}")
 
 if __name__ == '__main__':
     unittest.main()

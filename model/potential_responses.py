@@ -6,6 +6,8 @@
 import json
 import functools
 
+import classes
+
 class PotentialResponseTree:
     def __init__(self, prt_dict, is_root=False):
         self.id = prt_dict["id"]
@@ -133,10 +135,14 @@ class PotentialResponseTree:
         self.set_kids(new_kids)
 
     """
-        Fetch the full contents of this leaf.
+        Fetch the full contents of this leaf with data from given sources.
     """
-    def fetch_contents(self, sqlite_db):
-        contents = sqlite_db.get_post(self.id) if self.is_root else sqlite_db.get_comment(self.id)
+    def fetch_contents(self, sqlite_db=None, chroma_db=None):
+        if self.is_root:
+            contents = classes.Post(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db)
+        else:
+            contents = classes.Comment(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db)
+
         return contents
         
 
@@ -148,7 +154,7 @@ class PotentialResponseTree:
     """
     def clean(self, sqlite_db):
         try:
-            contents = self.fetch_contents(sqlite_db)
+            contents = self.fetch_contents(sqlite_db=sqlite_db)
             if contents.check(sqlite_db):
                 clean_kids = [kid for kid in self.kids if kid.clean(sqlite_db)]
                 self.kids = clean_kids
@@ -233,17 +239,9 @@ class PotentialResponseForestError(Exception):
 """
 
 class PotentialResponseForest:
-    def __init__(self, name, existing_prf=None):
+    def __init__(self, name, prf):
         self.name = name
-        if existing_prf != None:
-            self._init_from_existing(existing_prf)
-
-    """
-        Initialize from an existing potential response tree list in the format
-        produced in the data module.
-    """
-    def _init_from_existing(self, existing_prf):
-        self.roots = [PotentialResponseTree(prt, is_root=True) for prt in existing_prf]
+        self.roots = [PotentialResponseTree(prt, is_root=True) for prt in prf]
     
     def get_roots(self):
         return self.roots
@@ -386,7 +384,7 @@ class PotentialResponseForest:
         Get a list of timestamps for all roots.
     """
     def get_root_times(self, sqlite_db):
-        root_times = [root.fetch_contents(sqlite_db).time for root in self.roots]
+        root_times = [root.fetch_contents(sqlite_db=sqlite_db).time for root in self.roots]
         return root_times
 
     """
