@@ -59,6 +59,7 @@ class ChromaDB:
 
     """
         Create embeddings for a given collection, with given input
+        (return if given empty array, for some reason chroma throws an error)
     """
     def create_embeddings(self, collection_name, documents, ids, metadatas=None):
         if len(documents) != len(ids):
@@ -66,6 +67,9 @@ class ChromaDB:
         if metadatas != None:
             if len(metadatas) != len(ids):
                 raise ChromaError("Error creating embeddings: provided list of metadata differs in length from documents and ids.")
+
+        if len(documents) == 0:
+            return
 
         collection = self.get_collection(name=collection_name)
         collection.add(
@@ -75,64 +79,49 @@ class ChromaDB:
         )
 
     """
-        Generate embeddings for a list of user profiles and add them to the database.
-        Using random ids for the list attributes as I'll access them with metadata queries
+        Generate embeddings for a list of user profile dictionaries.
     """
-    def embed_user_profiles(self, user_profiles):
-        filtered_for_about = [user_profile for user_profile in user_profiles if user_profile.about != ""]
-        about_documents = [user_profile.about for user_profile in filtered_for_about]
-        about_ids = [user_profile.username for user_profile in filtered_for_about]
+    def embed_user_profiles(self, user_dict_list):
+
+        filtered_for_about = [user_dict for user_dict in user_dict_list if user_dict["about"] != ""]
+        about_documents = [user_dict["about"] for user_dict in filtered_for_about]
+        about_ids = [user_dict["username"] for user_dict in filtered_for_about]
         self.create_embeddings("user_abouts", about_documents, about_ids)
 
-        filtered_for_text_samples = [user_profile for user_profile in user_profiles if len(user_profile.text_samples) > 0]
-        if len(filtered_for_text_samples) > 0:
-            flattened_text_samples = functools.reduce(lambda acc, t: [*acc, *[{"text": te, "username": t.username, "id": uuid.uuid4()}for te in t.text_samples]], filtered_for_text_samples, [])
-            text_sample_documents = [t["text"] for t in flattened_text_samples]
-            text_sample_ids = [str(uuid.uuid4()) for t in flattened_text_samples]
-            text_sample_metadatas = [{"username": t["username"]} for t in flattened_text_samples]
-            self.create_embeddings("user_text_samples", text_sample_documents, text_sample_ids, metadatas=text_sample_metadatas)
-
-        filtered_for_beliefs = [user_profile for user_profile in user_profiles if len(user_profile.beliefs) > 0]
-        if len(filtered_for_beliefs) > 0:
-            flattened_beliefs = functools.reduce(lambda acc, t: [*acc, *[{"belief": te, "username": t.username, "id": uuid.uuid4()}for te in t.beliefs]], filtered_for_beliefs, [])
-            belief_documents = [t["belief"] for t in flattened_beliefs]
-            belief_ids = [str(uuid.uuid4()) for t in flattened_beliefs]
-            belief_metadatas = [{"username": t["username"]} for t in flattened_beliefs]
-            self.create_embeddings("user_beliefs", belief_documents, belief_ids, metadatas=belief_metadatas)
-
-        filtered_for_interests = [user_profile for user_profile in user_profiles if len(user_profile.interests) > 0]
-        if len(filtered_for_interests) > 0:
-            flattened_interests = functools.reduce(lambda acc, t: [*acc, *[{"interest": te, "username": t.username, "id": uuid.uuid4()}for te in t.interests]], filtered_for_interests, [])
-            interest_documents = [t["interest"] for t in flattened_interests]
-            interest_ids = [str(uuid.uuid4()) for t in flattened_interests]
-            interest_metadatas = [{"username": t["username"]} for t in flattened_interests]
-            self.create_embeddings("user_interests", interest_documents, interest_ids, metadatas=interest_metadatas)
+        list_cols = ["text_samples", "beliefs", "interests"]
+        for list_col in list_cols:
+            filtered = [user_dict for user_dict in user_dict_list if len(user_dict[list_col]) > 0]
+            flattened_text_samples = functools.reduce(lambda acc, t: [*acc, *[{"text": te, "username": t["username"], "id": uuid.uuid4()}for te in t[list_col]]], filtered, [])
+            documents = [t["text"] for t in flattened_text_samples]
+            ids = [str(uuid.uuid4()) for t in flattened_text_samples]
+            metadatas = [{"username": t["username"]} for t in flattened_text_samples]
+            self.create_embeddings(f"user_{list_col}", documents, ids, metadatas=metadatas)
 
     """
-        Generate embeddings for a list of posts and add them to the database.
+        Generate embeddings for a list of post dicts and add them to the database.
     """
-    def embed_posts(self, posts):
-        title_documents = [post.title for post in posts]
-        title_ids = [str(post.id) for post in posts]
+    def embed_posts(self, post_dict_list):
+        title_documents = [post["title"] for post in post_dict_list]
+        title_ids = [str(post["id"]) for post in post_dict_list]
         self.create_embeddings("post_titles", title_documents, title_ids)
 
-        filtered_for_text = [post for post in posts if post.text != ""]
-        text_documents = [post.text for post in filtered_for_text]
-        text_ids = [str(post.id) for post in filtered_for_text]
+        filtered_for_text = [post for post in post_dict_list if post["text"] != ""]
+        text_documents = [post["text"] for post in filtered_for_text]
+        text_ids = [str(post["id"]) for post in filtered_for_text]
         self.create_embeddings("post_text_contents", text_documents, text_ids)
 
-        filtered_for_url = [post for post in posts if post.url_content != ""]
-        url_documents = [post.url_content for post in filtered_for_url]
-        url_ids = [str(post.id) for post in filtered_for_url]
-        url_metadatas = [{"url": post.url} for post in filtered_for_url]
+        filtered_for_url = [post for post in post_dict_list if post["url_content"] != ""]
+        url_documents = [post["url_content"] for post in filtered_for_url]
+        url_ids = [str(post["id"]) for post in filtered_for_url]
+        url_metadatas = [{"url": post["url"]} for post in filtered_for_url]
         self.create_embeddings("post_url_contents", url_documents, url_ids, metadatas=url_metadatas)
 
     """
-        Generate embeddings for a list of comments and add them to the database.
+        Generate embeddings for a list of comment dicts and add them to the database.
     """
-    def embed_comments(self, comments):
-        text_documents = [comment.text for comment in comments]
-        text_ids = [str(comment.id) for comment in comments]
+    def embed_comments(self, comment_dict_list):
+        text_documents = [comment["text"] for comment in comment_dict_list]
+        text_ids = [str(comment["id"]) for comment in comment_dict_list]
         self.create_embeddings("comment_text_contents", text_documents, text_ids)
 
     """
@@ -183,3 +172,38 @@ class ChromaDB:
             "text_content": text_content["embeddings"]
         }
 
+    """
+        Remove embeddings for a given collection, with given input.
+    """
+    def remove_embeddings(self, collection_name, ids=None, where=None):
+        if ids == None and where == None:
+            raise ChromaError("Error: attempted to remove embeddings without specified ids or where filter.")
+        collection = self.get_collection(collection_name)
+        collection.delete(ids=ids, where=where)
+
+    """
+        Remove embeddings for a list of given usernames.
+    """
+    def remove_user_profile_embeddings(self, usernames):
+        self.remove_embeddings("user_abouts", ids=usernames)
+        for username in usernames:
+            self.remove_embeddings("user_text_samples", where={"username": username})
+            self.remove_embeddings("user_beliefs", where={"username": username})
+            self.remove_embeddings("user_interests", where={"username": username})
+
+
+    """
+        Remove embeddings for a list of post ids.
+    """
+    def remove_post_embeddings(self, post_ids):
+        str_ids = [str(post_id) for post_id in post_ids]
+        self.remove_embeddings("post_titles", ids=str_ids)
+        self.remove_embeddings("post_text_contents", ids=str_ids)
+        self.remove_embeddings("post_url_contents", ids=str_ids)
+
+    """
+        Remove embeddings for a list of comment ids.
+    """
+    def remove_comment_embeddings(self, comment_ids):
+        str_ids = [str(comment_id) for comment_id in comment_ids]
+        self.remove_embeddings("comment_text_contents", ids=str_ids)

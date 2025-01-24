@@ -145,18 +145,17 @@ class PotentialResponseTree:
 
         return contents
         
-
     """
         Check all items in this tree
         to see whether all of the data necessary to 
         generate a full feature set with it is present, and 
         if not, remove it, and all of its descendants.
     """
-    def clean(self, sqlite_db):
+    def clean(self, sqlite_db, chroma_db):
         try:
-            contents = self.fetch_contents(sqlite_db=sqlite_db)
-            if contents.check(sqlite_db):
-                clean_kids = [kid for kid in self.kids if kid.clean(sqlite_db)]
+            contents = self.fetch_contents(sqlite_db=sqlite_db, chroma_db=chroma_db)
+            if contents.check(sqlite_db, chroma_db):
+                clean_kids = [kid for kid in self.kids if kid.clean(sqlite_db, chroma_db)]
                 self.kids = clean_kids
                 return True
             else:
@@ -309,6 +308,12 @@ class PotentialResponseForest:
         else:
             raise PotentialResponseForestError(f"Error: Attempt to get branch of id {item_id} not present in forest.")
 
+    """
+        Get a full flattened list of all items in this forest.
+    """
+    def get_all_items(self):
+        all_items = functools.reduce(lambda acc, r: [*acc, *r], [root.get_flattened_descendants() for root in self.roots], [])
+        return all_items
 
     """
         Remove an item of a given id's branch  in one of the trees
@@ -376,9 +381,9 @@ class PotentialResponseForest:
     """
         Clean all roots.
     """
-    def clean(self, sqlite_db):
-        clean_roots = [root for root in self.roots if root.clean(sqlite_db)]
-        self.roots = clean_roots
+    def clean(self, sqlite_db, chroma_db):
+        clean_roots = [root for root in self.roots if root.clean(sqlite_db, chroma_db)]
+        self.set_roots(clean_roots)
 
     """
         Get a list of timestamps for all roots.

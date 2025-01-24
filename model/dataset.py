@@ -22,7 +22,7 @@ class DatasetError(Exception):
         super().__init__(message)
 
 class Dataset:
-    def __init__(self, name, existing_dataset_name=None, create_chroma=False, use_openai_client=False, override_featurex_defaults=None):
+    def __init__(self, name, existing_dataset_name=None, init_chroma=False, use_openai_client=False, override_featurex_defaults=None):
         utils.load_env()
 
         self.name = name
@@ -31,7 +31,7 @@ class Dataset:
         if use_openai_client:
             self.openai_client = OpenAI()
         if existing_dataset_name != None:
-            self._init_from_existing(existing_dataset_name, create_chroma=create_chroma)
+            self._init_from_existing(existing_dataset_name, init_chroma=init_chroma)
         else:
             self._init_from_scratch()
 
@@ -56,7 +56,7 @@ class Dataset:
     """
         Initialize from an existing dataset in the format produced in the data module.
     """
-    def _init_from_existing(self, existing_dataset_name, create_chroma=False):
+    def _init_from_existing(self, existing_dataset_name, init_chroma=False):
         self.dataset_path = self.root_dataset_path + existing_dataset_name + "/"
         print(f"Initializing dataset {self.name} from existing dataset at {self.dataset_path}...")
 
@@ -64,15 +64,40 @@ class Dataset:
         self.sqlite_db = sqlite_db.SqliteDB(self.sqlite_db_path)
 
         self.chroma_db_path = self.dataset_path + ".chroma"
-        self.chroma_db = chroma_db.ChromaDB(self.chroma_db_path, create=create_chroma)
+        self.chroma_db = chroma_db.ChromaDB(self.chroma_db_path, create=init_chroma)
 
         self.username_list_path = self.dataset_path  + "usernames.json"
         usernames = utils.read_json(self.username_list_path)
         self.user_pool = user_pool.UserPool(self.name, usernames)
+        if init_chroma:
+            user_profiles = self.user_pool.fetch_all_user_profiles(sqlite_db=self.sqlite_db, load_submissions=True)
+            
+            user_dicts = [user_profile.get_sqlite_att_dict() for user_profile in user_profiles]
+            self.chroma_db.embed_user_profiles(user_dicts)
+
+            for user_profile in user_profiles:
+                user_post_dicts = [post.get_sqlite_att_dict() for post in user_profile.posts]
+                self.chroma_db.embed_posts(user_post_dicts)
+
+                user_comment_dicts = [comment.get_sqlite_att_dict() for comment in user_profile.comments]
+                self.chroma_db.embed_comments(user_comment_dicts)
+
+                user_favorite_post_dicts = [post.get_sqlite_att_dict() for post in user_profile.favorite_posts]
+                self.chroma_db.embed_posts(user_favorite_post_dicts)
 
         self.prf_path = self.dataset_path  + "contentStringLists.json"
         prf = utils.read_json(self.prf_path)
         self.prf = potential_responses.PotentialResponseForest(self.name, prf)
+        if init_chroma:
+            all_items = self.prf.get_all_items()
+
+            posts = [item.fetch_contents(sqlite_db=self.sqlite_db) for item in all_items if item.get_is_root()]
+            post_dicts = [post.get_sqlite_att_dict() for post in posts]
+            self.chroma_db.embed_posts(post_dicts)
+
+            comments = [item.fetch_contents(sqlite_db=self.sqlite_db) for item in all_items if not item.get_is_root()]
+            comment_dicts = [comment.get_sqlite_att_dict() for comment in comments]
+            self.chroma_db.embed_comments(comment_dicts)
 
         print(f"Successfully initialized dataset {self.name} from existing dataset at {self.dataset_path}.")
 
@@ -146,7 +171,7 @@ class Dataset:
     def print_user_profile(self, username):
         user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db, chroma_db=self.chroma_db)
         print(user_profile)
-
+    
     """
         Print the contents of a potential response item, given its id.
     """
@@ -171,8 +196,13 @@ class Dataset:
     def add_users(self, user_dict_list, check_submission_history=False):
         try:
             username_list = [user_dict["username"] for user_dict in user_dict_list]
+
             self.user_pool.add_usernames(username_list)
-            self.sqlite_db.insert_user_profiles(user_dict_list, check_submission_history=check_submission_history)
+
+            self.sqlite_db.insert_user_profiles(user_dict_list, check_submission_history=check_submission_history) 
+
+            self.chroma_db.embed_user_profiles(user_dict_list)
+
             self.write_current_username_list()
 
             print("Successfully added users")
@@ -203,6 +233,8 @@ class Dataset:
 
             self.sqlite_db.remove_items("userProfiles", username_list)
 
+            self.chroma_db.remove_user_profile_embeddings(username_list)
+
             self.user_pool.remove_usernames(username_list)
 
             self.write_current_username_list()
@@ -227,7 +259,11 @@ class Dataset:
     def add_root_posts(self, post_dict_list):
         try:
             self.prf.add_roots([post_dict["id"] for post_dict in post_dict_list])
+
             self.sqlite_db.insert_posts(post_dict_list)
+
+            self.chroma_db.embed_posts(post_dict_list)
+
             self.write_current_prf()
 
             print("Successfully added root posts")
@@ -270,6 +306,8 @@ class Dataset:
 
             self.sqlite_db.remove_items("posts", post_ids)
 
+            self.chroma_db.remove_post_embeddings(post_ids)
+
             self.prf.remove_roots(post_ids)
 
             self.write_current_prf()
@@ -294,7 +332,11 @@ class Dataset:
                 parent_id = leaf_dict["parent_id"]
                 parent = self.prf.get_item(parent_id)
                 parent.add_kid(leaf_dict["id"])
+
             self.sqlite_db.insert_comments(leaf_dict_list)
+
+            self.chroma_db.embed_comments(leaf_dict_list)
+
             self.write_current_prf()
 
             print("Succesfully added leaf comments")
@@ -342,7 +384,10 @@ class Dataset:
 
             all_comment_ids_to_remove = [comment.get_id() for comment in all_comments_to_remove]
             unique_comment_ids_to_remove = list(set(all_comment_ids_to_remove))
+
             self.sqlite_db.remove_items("comments", unique_comment_ids_to_remove)
+
+            self.chroma_db.remove_comment_embeddings(unique_comment_ids_to_remove)
 
             self.prf.remove_items(comment_ids)
 
@@ -371,10 +416,10 @@ class Dataset:
         print(f"Initializing dataset {self.name} for run...")
 
         print("Cleaning user pool...")
-        self.user_pool.clean(self.sqlite_db)
+        self.user_pool.clean(self.sqlite_db, self.chroma_db)
 
         print("Cleaning potential response forest...")
-        self.prf.clean(self.sqlite_db)
+        self.prf.clean(self.sqlite_db, self.chroma_db)
 
         #If no initial time is specified,
         #Find the time at which the latest root post was made, and set that at the initial time.

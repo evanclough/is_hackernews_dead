@@ -17,10 +17,10 @@ class SqliteTests(unittest.TestCase):
         
         cls.test_dataset_name = "SCRATCH_TEST"
 
-        cls.dataset = dataset.Dataset("TEST", existing_dataset_name=cls.test_dataset_name, use_openai_client=True)
+        cls.dataset = dataset.Dataset(cls.test_dataset_name, existing_dataset_name=cls.test_dataset_name, use_openai_client=True)
         cls.dataset.initialize_for_run()
 
-        cls.insertion_num = 999
+        cls.insertion_num = 55555
         cls.test_username = f"test_username{cls.insertion_num}"
         print(f"Running tests on existing dataset {cls.test_dataset_name}...")
         print(f"test insertion number: {cls.insertion_num}")
