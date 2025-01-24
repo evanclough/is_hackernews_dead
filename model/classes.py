@@ -173,23 +173,37 @@ class UserProfile:
         self.store_submissions_by_type(sqlite_db, "favorites", skip_errors=skip_errors)
 
 
+"""
+    For post errors.
+"""
+class PostError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
 class Post:
     def __init__(self, post_id, sqlite_atts_dict=None, sqlite_db=None, chroma_db=None):
         self._DEBUG_IGNORE_CHECK = utils.fetch_env_var("DEBUG_IGNORE_CHECK") != '0'
+
+        self.has_sqlite_atts = False
+        self.has_embeddings = False
+
+        print(f"Loading post with id {post_id}...")
 
         self.id = post_id
 
         if sqlite_atts_dict != None:
             self._init_from_sqlite_atts(sqlite_atts_dict)
         if sqlite_db != None:
-            self._load_from_sqlite(sqlite_db, post_id)
+            self._load_from_sqlite(sqlite_db)
         if chroma_db != None:
-            self._load_from_chroma(chroma_db, post_id)
+            self._load_from_chroma(chroma_db)
 
     """
         Initilaize the class from a dict with all of the sqlite attributes
     """
     def _init_from_sqlite_atts(self, sqlite_atts_dict):
+        print(f"Creating post with id {self.id} from given sqlite attributes...")
+
         self.by = sqlite_atts_dict["by"]
         self.id = sqlite_atts_dict["id"]
         self.score = sqlite_atts_dict["score"]
@@ -200,11 +214,18 @@ class Post:
         self.url_content = sqlite_atts_dict["url_content"]
         self.misc_json = sqlite_atts_dict["misc_json"]
 
+        self.has_sqlite_atts = True
+        print(f"Created post with id {self.id} from given sqlite attributes.")
+
+
     """
         Load in attributes from sqlite.
     """
-    def _load_from_sqlite(self, sqlite_db, post_id):
-        sqlite_row = sqlite_db.get_post_row(post_id)
+    def _load_from_sqlite(self, sqlite_db):
+
+        print(f"Loading sqlite attributes for post with id {self.id}...")
+
+        sqlite_row = sqlite_db.get_post_row(self.id)
 
         self.by = sqlite_row[0]
         self.id = sqlite_row[1]
@@ -216,16 +237,31 @@ class Post:
         self.url_content = sqlite_row[7]
         self.misc_json = json.loads(sqlite_row[8])
 
+        self.has_sqlite_atts = True
+        print(f"Loaded sqlite attributes for post with id {self.id}.")
+
     """
         Load in attributes from chroma.
     """
-    def _load_from_chroma(self, chroma_db, post_id):
-        print(f"loaded post {post_id} from chroma")
+    def _load_from_chroma(self, chroma_db):
+        print(f"Loading embeddings for post with id {self.id}...")
+
+        embeddings = chroma_db.get_post_embeddings(self.id)
+
+        self.title_embeddings = embeddings["title"]
+        self.text_content_embeddings = embeddings["text_content"]
+        self.url_content_embeddings = embeddings["url_content"]
+
+        self.has_embeddings = True
+        print(f"Loaded embeddings for post with id {self.id}.")
 
     def __str__(self):
         contents = f"""
         Post {self.id}:
             id: {self.id}
+        """
+        if self.has_sqlite_atts:
+            contents += f"""
             author: {self.by}
             title: {self.title}
             created: {datetime.datetime.fromtimestamp(self.time)}
@@ -233,80 +269,98 @@ class Post:
             url: {self.url}
             misc json: {json.dumps(self.misc_json)}
         """
+        else:
+            contents += "\nDoes not have sqlite attributes."
+
+        contents += f"\n Embeddings are {'' if self.has_embeddings else ''} loaded."
+
         return contents
-
-
-    """
-        Generate embeddings for this post and store them in chroma.
-    """
-    def store_embeddings(self):
-        return
-
 
     """
         Create a string concisely describing this post,
         to be passed into the LLM during feature extraction.
     """
     def get_featurex_str(self):
-        contents = f"Title: {self.title}\n"
-        if self.text != "":
-            contents += f"Text body: {self.text}\n"
-        if self.url != "":
-            contents += f"Links to: {self.url}\n"
+        contents = ""
+
+        if self.has_sqlite_atts:
+            contents += f"Title: {self.title}\n"
+            if self.text != "":
+                contents += f"Text body: {self.text}\n"
+            if self.url != "":
+                contents += f"Links to: {self.url}\n"
+        else:
+            raise PostError(f"Error: attempted to generate feature extraction string for post with id {self.id} that does not contain sqlite attributes.")
+        
         return contents
 
     """
         Check this post to see whether or not it contains everything necessary
         in creation of a full feature set.
-
-        TODO: this should probably check the user pool as opposed to the database?
-
     """
-    def check(self, sqlite_db):
+    def check(self, sqlite_db, chroma_db):
         if self._DEBUG_IGNORE_CHECK: 
             return True
-        author = sqlite_db.get_user_profile(self.by)
 
-        if author == None:
-            print(f"{self} fails check, as its author could not be retrieved.")
+        print(f"Checking if post with id {self.id} contains all necessary attributes for feature creation...")
+        if not self.has_sqlite_atts:
+            print(f"Post with id {self.id} fails check, as it does not have sqlite attributes.")
             return False
+        
+        if not self.has_embeddings:
+            print(f"Post with id {self.id} fails check, as it does not have embeddings.")
 
-        author_passes = author.check(sqlite_db)
-
-        if not author_passes:
-            print(f"{self} fails check, as its author failed check.")
+        try:
+            author = UserProfile(self.by, sqlite_db=sqlite_db, chroma_db=chroma_db)
+            if not author.check(sqlite_db, chroma_db):
+                print(f"Post with id {self.id} fails check, as its author fails check.")
+                return False
+        except Exception as e:
+            print(f"Post with id {self.id} fails check, as its author could not be loaded.")
             return False
-
+    
         return True
 
 class Comment:
     def __init__(self, comment_id, sqlite_atts_dict=None, sqlite_db=None, chroma_db=None):
         self._DEBUG_IGNORE_CHECK = utils.fetch_env_var("DEBUG_IGNORE_CHECK") != '0'
 
+        self.has_sqlite_atts = False
+        self.has_embeddings = False
+
+        print(f"Loading comment with id {comment_id}...")
+
         self.id = comment_id
 
         if sqlite_atts_dict != None:
             self._init_from_sqlite_atts(sqlite_atts_dict)
         if sqlite_db != None:
-            self._load_from_sqlite(sqlite_db, comment_id)
+            self._load_from_sqlite(sqlite_db)
         if chroma_db != None:
-            self._load_from_chroma(chroma_db, comment_id)
+            self._load_from_chroma(chroma_db)
 
     """
         Initilaize the class from a dict containing all of the attributes from the sqlite table.
     """
     def _init_from_sqlite_atts(self, sqlite_atts_dict):
+        print(f"Initializing comment with id {self.id} from a dict of sqlite attributes...")
         self.by = sqlite_atts_dict["by"]
         self.id = sqlite_atts_dict["id"]
         self.time = int(sqlite_atts_dict["time"])
         self.text = sqlite_atts_dict["text"]
         self.misc_json = sqlite_atts_dict["misc_json"]
 
+        self.has_sqlite_atts = True
+        print(f"Initialized comment with id {self.id} from a dict of sqlite attributes.")
+
+
     """
         Load in attributes from sqlite.
     """
-    def _load_from_sqlite(self, sqlite_db, comment_id):
-        sqlite_row = sqlite_db.get_comment_row(comment_id)
+    def _load_from_sqlite(self, sqlite_db):
+        print(f"Loading sqlite attributes for comment with id {self.id}...")
+
+        sqlite_row = sqlite_db.get_comment_row(self.id)
 
         self.by = sqlite_row[0]
         self.id = sqlite_row[1]
@@ -314,42 +368,66 @@ class Comment:
         self.text = sqlite_row[3]
         self.misc_json = json.loads(sqlite_row[4])
 
+        self.has_sqlite_atts = True
+        print(f"Loaded sqlite attributes for comment with id {self.id}.")
+
+
     """
         Load in attributes from chroma.
     """
-    def _load_from_chroma(self, chroma_db, comment_id):
-        print(f"loaded comment {comment_id} from chroma")
+    def _load_from_chroma(self, chroma_db):
+        print(f"Loading embeddings for comment with id {self.id}...")
+
+        embeddings = chroma_db.get_comment_embeddings(self.id)
+
+        self.text_content_embeddings = embeddings["text_content"]
+
+        self.has_embeddings = True
+        print(f"Loaded embeddings for comment with id {self.id}.")
 
     def __str__(self):
         contents = f"""
         Comment {self.id}:
+        """
+
+        if self.has_sqlite_atts:
+            contents += f"""
             author: {self.by}
             text: {self.text}
             created: {datetime.datetime.fromtimestamp(self.time)}
             misc json: {json.dumps(self.misc_json)}
-        """        
+            """
+        else:
+            contents += "\nDoes not have sqlite attributes."
+        
+        contents += f"Embeddings are {'' if self.has_embeddings else 'not'} loaded. "
+
         return contents
 
     """
         Check this comment to see whether or not it contains everything necessary
         in creation of a full feature set.
-
-        TODO: this should probably check the user pool as opposed to the database?
     """
-    def check(self, sqlite_db):
+    def check(self, sqlite_db, chroma_db):
         if self._DEBUG_IGNORE_CHECK: 
             return True
-        author = sqlite_db.get_user_profile(self.by)
 
-        if author == None:
-            print(f"{self} fails check, as its author could not be retrieved.")
+        print(f"Checking if comment with id {self.id} contains all necessary attributes for feature creation...")
+        if not self.has_sqlite_atts:
+            print(f"Comment with id {self.id} fails check, as it does not have sqlite attributes.")
             return False
+        
+        if not self.has_embeddings:
+            print(f"Comment with id {self.id} fails check, as it does not have embeddings.")
 
-        author_passes = author.check(sqlite_db)
-
-        if not author_passes:
-            print(f"{self} fails check, as its author failed check.")
+        try:
+            author = UserProfile(self.by, sqlite_db=sqlite_db, chroma_db=chroma_db)
+            if not author.check(sqlite_db, chroma_db):
+                print(f"Comment with id {self.id} fails check, as its author fails check.")
+                return False
+        except Exception as e:
+            print(f"Comment with id {self.id} fails check, as its author could not be loaded.")
             return False
-
+    
         return True
 

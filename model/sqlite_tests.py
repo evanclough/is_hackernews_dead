@@ -15,12 +15,12 @@ class SqliteTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         
-        cls.test_dataset_name = "CURRENT_TEST"
+        cls.test_dataset_name = "SCRATCH_TEST"
 
         cls.dataset = dataset.Dataset("TEST", existing_dataset_name=cls.test_dataset_name, use_openai_client=True)
         cls.dataset.initialize_for_run()
 
-        cls.insertion_num = 666
+        cls.insertion_num = 999
         cls.test_username = f"test_username{cls.insertion_num}"
         print(f"Running tests on existing dataset {cls.test_dataset_name}...")
         print(f"test insertion number: {cls.insertion_num}")
@@ -29,7 +29,7 @@ class SqliteTests(unittest.TestCase):
         Test the initialization of the dataset.
         (doesn't actually do anything, really just testing the set up class method)
     """
-    def test_initialization(self):
+    def test_init(self):
         self.assertIsNotNone(self.dataset)
 
     """
@@ -45,9 +45,9 @@ class SqliteTests(unittest.TestCase):
             "post_ids": [],
             "comment_ids": [],
             "favorite_post_ids": [],
-            "text_samples": [],
-            "interests": [],
-            "beliefs": [],
+            "text_samples": ["test123", "test1443"],
+            "interests": ["test515123", "tes223t1443"],
+            "beliefs": ["test124123", "test1443"],
             "misc_json": []
         }
 
