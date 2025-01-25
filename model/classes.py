@@ -1,6 +1,6 @@
 """
-    The classes used to represent the three root datatypes, 
-    and the classes used for the dataset.
+    The classes used to represent the three datatypes,
+    user profile, post, and comment.
 """
 
 import utils
@@ -146,6 +146,12 @@ class UserProfile:
         self._load_submissions_by_type("comments", sqlite_db=sqlite_db, chroma_db=chroma_db, skip_errors=skip_errors)
         self._load_submissions_by_type("favorites", sqlite_db=sqlite_db, chroma_db=chroma_db, skip_errors=skip_errors)
 
+        self.submissions = {
+            "posts": self.posts,
+            "comments": self.comments,
+            "favorite_posts": self.favorite_posts
+        }
+
         self.has_submissions = True
 
     """
@@ -154,12 +160,9 @@ class UserProfile:
     def _load_from_chroma(self, chroma_db):
         print(f"Loading embeddings for user {self.username}...")
 
-        embeddings = chroma_db.get_user_profile_embeddings(self.username)
+        embeddings = chroma_db.get_embeddings_for_datatype("user_profile", [self.username])
 
-        self.about_embeddings = embeddings["about"]
-        self.text_sample_embeddings = embeddings["text_samples"]
-        self.beliefs_embeddings = embeddings["beliefs"]
-        self.interests_embeddings = embeddings["interests"]
+        self.embeddings = embeddings[0]
 
         self.has_embeddings = True
         print(f"Loaded embeddings for user {self.username}.")
@@ -378,11 +381,9 @@ class Post(Item):
     def _load_from_chroma(self, chroma_db):
         print(f"Loading embeddings for post with id {self.id}...")
 
-        embeddings = chroma_db.get_post_embeddings(self.id)
+        embeddings = chroma_db.get_embeddings_for_datatype("post", [self.id])
 
-        self.title_embeddings = embeddings["title"]
-        self.text_content_embeddings = embeddings["text_content"]
-        self.url_content_embeddings = embeddings["url_content"]
+        self.embeddings = embeddings[0]
 
         self.has_embeddings = True
         print(f"Loaded embeddings for post with id {self.id}.")
@@ -508,9 +509,9 @@ class Comment(Item):
     def _load_from_chroma(self, chroma_db):
         print(f"Loading embeddings for comment with id {self.id}...")
 
-        embeddings = chroma_db.get_comment_embeddings(self.id)
+        embeddings = chroma_db.get_embeddings_for_datatype("comment", [self.id])
 
-        self.text_content_embeddings = embeddings["text_content"]
+        self.embeddings = embeddings[0]
 
         self.has_embeddings = True
         print(f"Loaded embeddings for comment with id {self.id}.")

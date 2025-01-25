@@ -121,7 +121,7 @@ class SqliteTests(unittest.TestCase):
     """
     def test_comment_removal(self):
         comment_to_remove = self.insertion_num + 1
-        self.assertTrue(self.dataset.remove_leaf_comments([comment_to_remove]))
+        self.assertTrue(self.dataset.remove_comments([comment_to_remove]))
 
     """
         Test removing a user from the dataset, and also removing all of their submissions.
@@ -141,7 +141,7 @@ class SqliteTests(unittest.TestCase):
     """
     def test_full_comment_removal(self):
         comment_to_remove = self.insertion_num + 2
-        self.assertTrue(self.dataset.remove_leaf_comments([comment_to_remove], update_author_profile=True))
+        self.assertTrue(self.dataset.remove_comments([comment_to_remove], update_author_profile=True))
 
     """
         Run all of the insertion tests in the necessary order.

@@ -73,17 +73,17 @@ class Dataset:
             user_profiles = self.user_pool.fetch_all_user_profiles(sqlite_db=self.sqlite_db, load_submissions=True)
             
             user_dicts = [user_profile.get_sqlite_att_dict() for user_profile in user_profiles]
-            self.chroma_db.embed_user_profiles(user_dicts)
+            self.chroma_db.embed_datatype("user_profile", user_dicts)
 
             for user_profile in user_profiles:
                 user_post_dicts = [post.get_sqlite_att_dict() for post in user_profile.posts]
-                self.chroma_db.embed_posts(user_post_dicts)
+                self.chroma_db.embed_datatype("post", user_post_dicts)
 
                 user_comment_dicts = [comment.get_sqlite_att_dict() for comment in user_profile.comments]
-                self.chroma_db.embed_comments(user_comment_dicts)
+                self.chroma_db.embed_datatype("comment", user_comment_dicts)
 
                 user_favorite_post_dicts = [post.get_sqlite_att_dict() for post in user_profile.favorite_posts]
-                self.chroma_db.embed_posts(user_favorite_post_dicts)
+                self.chroma_db.embed_datatype("post", user_favorite_post_dicts)
 
         self.prf_path = self.dataset_path  + "contentStringLists.json"
         prf = utils.read_json(self.prf_path)
@@ -93,11 +93,11 @@ class Dataset:
 
             posts = [item.fetch_contents(sqlite_db=self.sqlite_db) for item in all_items if item.get_is_root()]
             post_dicts = [post.get_sqlite_att_dict() for post in posts]
-            self.chroma_db.embed_posts(post_dicts)
+            self.chroma_db.embed_datatype("post", post_dicts)
 
             comments = [item.fetch_contents(sqlite_db=self.sqlite_db) for item in all_items if not item.get_is_root()]
             comment_dicts = [comment.get_sqlite_att_dict() for comment in comments]
-            self.chroma_db.embed_comments(comment_dicts)
+            self.chroma_db.embed_datatype("comment", comment_dicts)
 
         print(f"Successfully initialized dataset {self.name} from existing dataset at {self.dataset_path}.")
 
@@ -197,16 +197,24 @@ class Dataset:
         try:
             username_list = [user_dict["username"] for user_dict in user_dict_list]
 
+            print("Adding users")
+            for username in username_list:
+                print(username)
+            print("to the dataset...")
+
             self.user_pool.add_usernames(username_list)
 
+            print("Putting into sqlite...")
             self.sqlite_db.insert_user_profiles(user_dict_list, check_submission_history=check_submission_history) 
 
-            self.chroma_db.embed_user_profiles(user_dict_list)
+            print("Generating embeddings...")
+            self.chroma_db.embed_datatype("user_profile", user_dict_list)
 
             self.write_current_username_list()
 
             print("Successfully added users")
-            [print(user_dict["username"]) for user_dict in user_dict_list]
+            for username in username_list:
+                print(username)
             print("to the dataset.")
 
             return True
@@ -220,6 +228,16 @@ class Dataset:
     """
     def remove_users(self, username_list, remove_posts=False, remove_comments=False):
         try:
+
+            print("Removing users:")
+            for username in username_list:
+                print(username)
+            if remove_posts:
+                print("and all of their posts")
+            if remove_comments:
+                print("and all of their comments")
+            print("from the dataset...")
+
             user_profiles = self.user_pool.fetch_some_user_profiles(username_list, self.sqlite_db)
 
             if remove_posts:
@@ -229,18 +247,21 @@ class Dataset:
             if remove_comments:
                 for user_profile in user_profiles:
                     comment_ids = user_profile.comment_ids
-                    self.remove_leaf_comments(comment_ids)
+                    self.remove_comments(comment_ids)
 
+            print("Removing from sqlite...")
             self.sqlite_db.remove_items("userProfiles", username_list)
 
-            self.chroma_db.remove_user_profile_embeddings(username_list)
+            print("Removing embeddings...")
+            self.chroma_db.remove_embeddings_for_datatype("user_profile", username_list)
 
             self.user_pool.remove_usernames(username_list)
 
             self.write_current_username_list()
 
             print("Successfully removed users:")
-            [print(username) for username in username_list]
+            for username in username_list:
+                print(username)
             if remove_posts:
                 print("and all of their posts")
             if remove_comments:
@@ -258,16 +279,24 @@ class Dataset:
     """
     def add_root_posts(self, post_dict_list):
         try:
+            print("Adding root posts:")
+            for post_dict in post_dict_list:
+                print(post_dict["id"])
+            print("to the dataset...")
+
             self.prf.add_roots([post_dict["id"] for post_dict in post_dict_list])
 
+            print("Putting into sqlite...")
             self.sqlite_db.insert_posts(post_dict_list)
 
-            self.chroma_db.embed_posts(post_dict_list)
+            print("Generating embeddings...")
+            self.chroma_db.embed_datatype("post", post_dict_list)
 
             self.write_current_prf()
 
             print("Successfully added root posts")
-            [print(post_dict["id"]) for post_dict in post_dict_list]
+            for post_dict in post_dict_list:
+                print(post_dict["id"])
             print("to the dataset.")
 
             return True
@@ -282,13 +311,18 @@ class Dataset:
     def remove_root_posts(self, post_ids, update_author_profile=False):
         try:
 
+            print("Removing root posts:")
+            for post_dict in post_dict_list:
+                print(post_dict["id"])
+            print("from the dataset...")
+
             all_kid_ids = []
             for post_id in post_ids:
                 post = self.prf.get_item(post_id)
                 kids = post.get_kids()
                 kid_ids = [kid.get_id() for kid in kids]
                 all_kid_ids = [*all_kid_ids, *kid_ids]
-            self.remove_leaf_comments(all_kid_ids, update_author_profile=update_author_profile)
+            self.remove_comments(all_kid_ids, update_author_profile=update_author_profile)
             
             if update_author_profile:
                 author_post_map = {}
@@ -304,16 +338,19 @@ class Dataset:
                 for username, user_post_ids in author_post_map.items():
                     self.sqlite_db.remove_post_ids_from_user(username, user_post_ids)
 
+            print("Removing from sqlite...")
             self.sqlite_db.remove_items("posts", post_ids)
 
-            self.chroma_db.remove_post_embeddings(post_ids)
+            print("Removing embeddings...")
+            self.chroma_db.remove_embeddings_for_datatype("post", post_ids)
 
             self.prf.remove_roots(post_ids)
 
             self.write_current_prf()
 
             print("Successfully removed root posts with ids:")
-            [print(post_id) for post_id in post_ids]
+            for post_dict in post_dict_list:
+                print(post_dict["id"])
             print("from the dataset.")
 
             return True
@@ -328,19 +365,27 @@ class Dataset:
     """
     def add_leaf_comments(self, leaf_dict_list):
         try:
+            print("Adding leaf comments:")
+            for leaf_dict in leaf_dict_list:
+                print(leaf_dict["id"])
+            print("to the dataset...")
+
             for leaf_dict in leaf_dict_list:
                 parent_id = leaf_dict["parent_id"]
                 parent = self.prf.get_item(parent_id)
                 parent.add_kid(leaf_dict["id"])
 
+            print("Putting into sqlite...")
             self.sqlite_db.insert_comments(leaf_dict_list)
 
-            self.chroma_db.embed_comments(leaf_dict_list)
+            print("Generating embeddings...")
+            self.chroma_db.embed_datatype("comment", leaf_dict_list)
 
             self.write_current_prf()
 
             print("Succesfully added leaf comments")
-            [print(leaf_dict["id"]) for leaf_dict in leaf_dict_list]
+            for leaf_dict in leaf_dict_list:
+                print(leaf_dict["id"])
             print("to the dataset.")
 
             return True
@@ -353,8 +398,13 @@ class Dataset:
         Remove a list of comments from the dataset, and all of their descendants, given a list of ids.
         (passing in non-existing comment ids is chill here)
     """
-    def remove_leaf_comments(self, comment_ids, update_author_profile=False):
+    def remove_comments(self, comment_ids, update_author_profile=False):
         try:
+            print("Removing comments:")
+            for comment_id in comment_ids:
+                print(comment_id)
+            print("and all of their descendants from the dataset...")
+
             all_comments_to_remove = []
 
             for comment_id in comment_ids:
@@ -366,6 +416,11 @@ class Dataset:
                 comment_and_descendants = [dec for dec in comment.get_flattened_descendants()]
                 all_comments_to_remove = [*all_comments_to_remove, *comment_and_descendants]
             
+            print("Full list of comments to be removed, including descendants:")
+            for comment in all_comments_to_remove:
+                print(comment.get_id())
+            
+
             if update_author_profile:
                 comment_contents = [comment.fetch_contents(sqlite_db=self.sqlite_db) for comment in all_comments_to_remove]
 
@@ -385,17 +440,20 @@ class Dataset:
             all_comment_ids_to_remove = [comment.get_id() for comment in all_comments_to_remove]
             unique_comment_ids_to_remove = list(set(all_comment_ids_to_remove))
 
+            print("Removing from sqlite...")
             self.sqlite_db.remove_items("comments", unique_comment_ids_to_remove)
 
-            self.chroma_db.remove_comment_embeddings(unique_comment_ids_to_remove)
+            print("Removing embeddings...")
+            self.chroma_db.remove_embeddings_for_datatype("comment", unique_comment_ids_to_remove)
 
             self.prf.remove_items(comment_ids)
 
             self.write_current_prf()
 
-            print("Successfully removed leaf comments with ids:")
-            [print(comment_id) for comment_id in comment_ids]
-            print("from the dataset.")
+            print("Successfully removed comments with ids:")
+            for comment_id in comment_ids:
+                print(comment_id)
+            print("and all of their descendants from the dataset.")
 
             return True
         except Exception as e:
@@ -499,7 +557,6 @@ class Dataset:
             new_misc_json = {**item_contents.misc_json, **dict_to_add}
             print(new_misc_json)
         else:
-            print("fuck")
             new_misc_json = dict_to_add
             
         update_dict = {"miscJson": json.dumps(new_misc_json)}
@@ -509,39 +566,61 @@ class Dataset:
             self.sqlite_db.update_comment_record(item_id, update_dict)
 
     """
-        Store embeddings for a given item in this dataset's potential response forest
-        to store in chroma db.
-    """
-    def store_embeddings_for_item(self, item_id):
-        item = self.prf.get_item(item_id)
-        item_contents = item.fetch_contents(sqlite_db=self.sqlite_db)
-
-    """
         Populate the text samples record for a given username in the user pool.
     """
     def populate_text_samples(self, username):
-        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db)
-        text_samples = feature_extraction.get_text_samples(user_profile, self.sqlite_db, self._num_text_samples, self.openai_client, skip_sub_ret_errors=self._skip_sub_ret_errors)
+        print(f"Populating text samples via LLM for user {username}...")
+        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db, load_submissions=true)
+
+        print("Generating...")
+        text_samples = feature_extraction.get_text_samples(username, user_profile.comments, self._num_text_samples, self.openai_client, skip_sub_ret_errors=self._skip_sub_ret_errors)
+        
+        print("Putting into sqlite...")
         update_dict = {"textSamples": json.dumps(text_samples)}
         self.sqlite_db.update_user_profile(username, update_dict)
+
+        print("Updating embeddings...")
+        update_dict = {"text_samples": text_samples, "username": username}
+        self.chroma_db.update_embeddings_for_datatype("user_profile", [update_dict], atts=["text_samples"])
+
+        print(f"Successfully populated text samples via LLM for user {username}.")
 
     """
         Populate the beliefs record for a given user in the user pool.
     """
     def populate_beliefs(self, username):
-        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db)
-        beliefs = feature_extraction.get_beliefs(user_profile, self.sqlite_db, self._num_beliefs, self._belief_char_max, self.openai_client, skip_sub_ret_errors=self._skip_sub_ret_errors)
-        print(beliefs)
+        print(f"Populating beliefs via LLM for user {username}...")
+        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db, load_submissions=True)
+
+        print("Generating...")
+        beliefs = feature_extraction.get_beliefs(username, user_profile.submissions, self._num_beliefs, self._belief_char_max, self.openai_client, skip_sub_ret_errors=self._skip_sub_ret_errors)
+
+        print("Putting into sqlite...")        
         update_dict = {"beliefs": json.dumps(beliefs)}
         self.sqlite_db.update_user_profile(username, update_dict)
+
+        print("Updating embeddings...")
+        update_dict = {"beliefs": beliefs, "username": username}
+        self.chroma_db.update_embeddings_for_datatype("user_profile", [update_dict], atts=["beliefs"])
+
+        print(f"Successfully populated beliefs via LLM for user {username}.")
 
     """
         Populate the interests record for a given user in the user pool.
     """
     def populate_interests(self, username):
-        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db)
-        interests = feature_extraction.get_interests(user_profile, self.sqlite_db, self._num_interests, self.openai_client, skip_sub_ret_errors=self._skip_sub_ret_errors)
-        print(interests)
+        print(f"Populating interests via LLM for user {username}...")
+        user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db, load_submissions=True)
+
+        print("Generating...")
+        interests = feature_extraction.get_interests(username, user_profile.submissions, self._num_interests, self.openai_client, skip_sub_ret_errors=self._skip_sub_ret_errors)
+
+        print("Putting into sqlite...")        
         update_dict = {"interests": json.dumps(interests)}
         self.sqlite_db.update_user_profile(username, update_dict)
 
+        print("Updating embeddings...")
+        update_dict = {"interests": interests, "username": username}
+        self.chroma_db.update_embeddings_for_datatype("user_profile", [update_dict], atts=["interests"])
+
+        print(f"Successfully populated interests via LLM for user {username}.")

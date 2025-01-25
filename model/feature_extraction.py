@@ -14,13 +14,19 @@ class StringList(BaseModel):
     items: list[str]
 
 """
+    for feature extraction errors 
+"""
+class FeatureExtractionError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
+"""
     Get a list of text samples for a given user that are particularly indicative
     of their grammar, to be used in generation.
 """
-def get_text_samples(user_profile, sqlite_db, num_samples, openai_client, skip_sub_ret_errors=False):
+def get_text_samples(username, comment_history, num_samples, openai_client, skip_sub_ret_errors=False):
     print(f"Generating text samples for user {user_profile.username}...")
-
-    user_profile.store_submissions_by_type(sqlite_db, "comments", skip_errors=skip_sub_ret_errors)
 
     prompt = f"""
             You will be given a selection of comments made by
@@ -31,7 +37,7 @@ def get_text_samples(user_profile, sqlite_db, num_samples, openai_client, skip_s
             Here are the comments:"""
 
 
-    for comment in user_profile.comments:
+    for comment in comment_history:
         prompt += "\n\nCOMMENT:\n"
         prompt += comment.text
 
@@ -42,11 +48,9 @@ def get_text_samples(user_profile, sqlite_db, num_samples, openai_client, skip_s
 """
     Get a list of beliefs for a given user, as determined by LLM.
 """
-def get_beliefs(user_profile, sqlite_db, num_beliefs, belief_char_max, openai_client, skip_sub_ret_errors=False):
+def get_beliefs(username, submissions, num_beliefs, belief_char_max, openai_client, skip_sub_ret_errors=False):
 
-    print(f"Generating beliefs for user {user_profile.username}...")
-
-    user_profile.store_all_submissions(sqlite_db, skip_errors=skip_sub_ret_errors)
+    print(f"Generating beliefs for user {username}...")
 
     prompt = f"""
         You will be given information on a user on an online forum,
@@ -57,17 +61,17 @@ def get_beliefs(user_profile, sqlite_db, num_beliefs, belief_char_max, openai_cl
         with these ordered from strongest to weakest, with first being strongest, and last being weakest.
 
         Here are some of the user's posts:"""
-    for post in user_profile.posts:
+    for post in submissions["posts"]:
         prompt += "\n\nPOST:\n"
         prompt += post.get_featurex_str()
 
     prompt += "\nHere are some of the user's comments:\n"
-    for comment in user_profile.comments:
+    for comment in submissions["comments"]:
         prompt += "\n\nCOMMENT:\n"
         prompt += comment.text
     
     prompt += "\nHere are the user's favorited posts:\n"
-    for favorite_post in user_profile.favorite_posts:
+    for favorite_post in submissions["favorite_posts"]:
         prompt += "\n\nFAVORITE POST:\n"
         prompt += favorite_post.get_featurex_str()
 
@@ -78,11 +82,9 @@ def get_beliefs(user_profile, sqlite_db, num_beliefs, belief_char_max, openai_cl
 """
     Get a list of interests for a given user, as determined by LLM.
 """
-def get_interests(user_profile, sqlite_db, num_interests, openai_client, skip_sub_ret_errors=False):
+def get_interests(username, submissions, num_interests, openai_client, skip_sub_ret_errors=False):
 
-    print(f"Generating interests for user {user_profile.username}...")
-
-    user_profile.store_all_submissions(sqlite_db, skip_errors=skip_sub_ret_errors)
+    print(f"Generating interests for user {username}...")
 
     prompt = f"""
         You will be given information on a user on an online forum,
@@ -93,17 +95,17 @@ def get_interests(user_profile, sqlite_db, num_interests, openai_client, skip_su
 
         Here are some of the user's posts:"""
 
-    for post in user_profile.posts:
+    for post in submissions["posts"]:
         prompt += "\n\nPOST:\n"
         prompt += post.get_featurex_str()
 
     prompt += "\nHere are some of the user's comments:\n"
-    for comment in user_profile.comments:
+    for comment in submissions["comments"]:
         prompt += "\n\nCOMMENT:\n"
         prompt += comment.text
     
     prompt += "\nHere are the user's favorited posts:\n"
-    for favorite_post in user_profile.favorite_posts:
+    for favorite_post in submissions["favorite_posts"]:
         prompt += "\n\nFAVORITE POST:\n"
         prompt += favorite_post.get_featurex_str()
 

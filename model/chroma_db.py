@@ -33,35 +33,39 @@ class ChromaDB:
                 model_name=utils.fetch_env_var("EMBEDDING_MODEL")
         )
 
+        self.atts = [
+            {"datatype": "user_profile", "name": "about", "list": False},
+            {"datatype": "user_profile", "name": "text_samples", "list": True},
+            {"datatype": "user_profile", "name": "beliefs", "list": True},
+            {"datatype": "user_profile", "name": "interests", "list": True},
+            {"datatype": "post", "name": "title", "list": False},
+            {"datatype": "post", "name": "text", "list": False},
+            {"datatype": "post", "name": "url_content", "list": False},
+            {"datatype": "comment", "name": "text", "list": False}
+        ]
+        self.get_id_att = lambda datatype: "username" if datatype == "user_profile" else "id"
+
         if create:
             self._create()
 
     """
-        Create a chroma db at a given path, with collections for the three root datatypes.
+        Create collections for each text attribute in the three datatypes
     """
     def _create(self):
-        self.client.create_collection(name="user_abouts", embedding_function=self.embedding_function)
-        self.client.create_collection(name="user_text_samples", embedding_function=self.embedding_function)
-        self.client.create_collection(name="user_beliefs", embedding_function=self.embedding_function)
-        self.client.create_collection(name="user_interests", embedding_function=self.embedding_function)
-
-        self.client.create_collection(name="post_titles", embedding_function=self.embedding_function)
-        self.client.create_collection(name="post_text_contents", embedding_function=self.embedding_function)
-        self.client.create_collection(name="post_url_contents", embedding_function=self.embedding_function)
-
-        self.client.create_collection(name="comment_text_contents", embedding_function=self.embedding_function)
-    
+        for att in self.atts:
+            self.client.create_collection(name=f"{att['datatype']}_{att['name']}", embedding_function=self.embedding_function)
+        
     """
-        Get a collection of a given name.
+        Get a collection of a given attribute for a given datatype.
     """
-    def get_collection(self, name):
-        return self.client.get_collection(name=name, embedding_function=self.embedding_function)
+    def get_collection(self, datatype, att):
+        return self.client.get_collection(name=f"{datatype}_{att}", embedding_function=self.embedding_function)
 
     """
         Create embeddings for a given collection, with given input
         (return if given empty array, for some reason chroma throws an error)
     """
-    def create_embeddings(self, collection_name, documents, ids, metadatas=None):
+    def create_embeddings(self, datatype, att, documents, ids, metadatas=None, update=False):
         if len(documents) != len(ids):
             raise ChromaError("Error creating embeddings: provided list of documents differs in length from list of ids.")
         if metadatas != None:
@@ -69,141 +73,117 @@ class ChromaDB:
                 raise ChromaError("Error creating embeddings: provided list of metadata differs in length from documents and ids.")
 
         if len(documents) == 0:
+            print(f"Attempted to create embeddings of {datatype}_{att} for ids {ids} with empty list of documents. Returning...")
             return
 
-        collection = self.get_collection(name=collection_name)
-        collection.add(
-            documents=documents,
-            metadatas=metadatas,
-            ids=ids
-        )
+        print(f"{'UPDATING' if update else 'CREATING'} EMBEDDINGS FOR {datatype}_{att} ")
+        print("DOCUMENTS:")
+        print(documents)
+        print("IDS:")
+        print(ids)
+        print("METADATAS:")
+        print(metadatas)
+        print("\n")
+
+        collection = self.get_collection(datatype, att)
+
+        operation = collection.update if update else collection.add
+
+        operation(documents=documents, ids=ids, metadatas=metadatas)
 
     """
-        Generate embeddings for a list of user profile dictionaries.
+        Generate embeddings for a given attribute in a given dict list.
     """
-    def embed_user_profiles(self, user_dict_list):
-
-        filtered_for_about = [user_dict for user_dict in user_dict_list if user_dict["about"] != ""]
-        about_documents = [user_dict["about"] for user_dict in filtered_for_about]
-        about_ids = [user_dict["username"] for user_dict in filtered_for_about]
-        self.create_embeddings("user_abouts", about_documents, about_ids)
-
-        list_cols = ["text_samples", "beliefs", "interests"]
-        for list_col in list_cols:
-            filtered = [user_dict for user_dict in user_dict_list if len(user_dict[list_col]) > 0]
-            flattened_text_samples = functools.reduce(lambda acc, t: [*acc, *[{"text": te, "username": t["username"], "id": uuid.uuid4()}for te in t[list_col]]], filtered, [])
-            documents = [t["text"] for t in flattened_text_samples]
-            ids = [str(uuid.uuid4()) for t in flattened_text_samples]
-            metadatas = [{"username": t["username"]} for t in flattened_text_samples]
-            self.create_embeddings(f"user_{list_col}", documents, ids, metadatas=metadatas)
-
+    def embed_attribute(self, datatype, att, id_att, is_list_att, dict_list, update=False):
+        if is_list_att:
+            flattened = functools.reduce(lambda acc, d: [*acc, *[{"doc": list_att_item, "query_att": {"query_att": d[id_att]}, "id": uuid.uuid4()} for list_att_item in d[att] if list_att_item != ""]], dict_list, [])
+            documents = [d["doc"] for d in flattened]
+            ids = [str(d["id"]) for d in flattened]
+            metadatas = [d["query_att"] for d in flattened]
+        else:
+            dict_list = [d for d in dict_list if d[att] != ""]
+            documents = [d[att] for d in dict_list]
+            ids = [str(d[id_att]) for d in dict_list]
+            metadatas = None
+        
+        self.create_embeddings(datatype, att, documents, ids, metadatas=metadatas, update=update)
+        
     """
-        Generate embeddings for a list of post dicts and add them to the database.
+        Generate embeddings for a list of dicts representing one of the three datatypes
     """
-    def embed_posts(self, post_dict_list):
-        title_documents = [post["title"] for post in post_dict_list]
-        title_ids = [str(post["id"]) for post in post_dict_list]
-        self.create_embeddings("post_titles", title_documents, title_ids)
-
-        filtered_for_text = [post for post in post_dict_list if post["text"] != ""]
-        text_documents = [post["text"] for post in filtered_for_text]
-        text_ids = [str(post["id"]) for post in filtered_for_text]
-        self.create_embeddings("post_text_contents", text_documents, text_ids)
-
-        filtered_for_url = [post for post in post_dict_list if post["url_content"] != ""]
-        url_documents = [post["url_content"] for post in filtered_for_url]
-        url_ids = [str(post["id"]) for post in filtered_for_url]
-        url_metadatas = [{"url": post["url"]} for post in filtered_for_url]
-        self.create_embeddings("post_url_contents", url_documents, url_ids, metadatas=url_metadatas)
-
-    """
-        Generate embeddings for a list of comment dicts and add them to the database.
-    """
-    def embed_comments(self, comment_dict_list):
-        text_documents = [comment["text"] for comment in comment_dict_list]
-        text_ids = [str(comment["id"]) for comment in comment_dict_list]
-        self.create_embeddings("comment_text_contents", text_documents, text_ids)
-
+    def embed_datatype(self, datatype, dict_list):
+        datatype_atts = [att for att in self.atts if att["datatype"] == datatype]
+        for att in datatype_atts:
+            self.embed_attribute(att["datatype"], att["name"], self.get_id_att(datatype), att["list"], dict_list)
+    
     """
         Retrieve embeddings from a given collection, with specified filters.
     """
-    def get_embeddings(self, collection_name, ids=None, where=None):
-        collection = self.get_collection(name=collection_name)
+    def get_embeddings_for_attribute(self, datatype, att, ids=None, where=None):
+        collection = self.get_collection(datatype, att)
         embeddings = collection.get(ids=ids, where=where, include=["embeddings"])
-        return embeddings
+        return embeddings["embeddings"]
 
     """
-        Return embeddings for a user profile of a given username.
+        Retrieve embeddings for one of the three base datatypes, given a list of ids.
     """
-    def get_user_profile_embeddings(self, username):
-        about = self.get_embeddings("user_abouts", ids=[username])
-        text_samples = self.get_embeddings("user_text_samples", where={"username": username})
-        beliefs = self.get_embeddings("user_beliefs", where={"username": username})
-        interests = self.get_embeddings("user_interests", where={"username": username})
-
-        return {
-            "about": about["embeddings"],
-            "text_samples": text_samples["embeddings"],
-            "beliefs": beliefs["embeddings"],
-            "interests": interests["embeddings"]
-        }
-
-    """
-        Return embeddings for a given post ID.
-    """
-    def get_post_embeddings(self, post_id):
-        title = self.get_embeddings("post_titles", ids=[str(post_id)])
-        text_content = self.get_embeddings("post_text_contents", ids=[str(post_id)])
-        url_content = self.get_embeddings("post_url_contents", ids=[str(post_id)])
-
-        return {
-            "title": title["embeddings"],
-            "text_content": text_content["embeddings"],
-            "url_content": url_content["embeddings"]
-        }
-
-    """
-        Return embeddings for a list of comment IDs.
-    """
-    def get_comment_embeddings(self, comment_id):
-        text_content = self.get_embeddings("comment_text_contents", ids=[str(comment_id)])
-
-        return {
-            "text_content": text_content["embeddings"]
-        }
+    def get_embeddings_for_datatype(self, datatype, id_list):
+        datatype_atts = [att for att in self.atts if att["datatype"] == datatype]
+        embeddings = []
+        for i in id_list:
+            id_embeddings = {}
+            for att in datatype_atts:
+                id_embeddings[att["name"]] = self.get_embeddings_for_attribute(att["datatype"], att["name"], ids=(None if att["list"] else [str(i)]), where=({"query_att": str(i)} if att["list"] else None))
+            embeddings.append(id_embeddings)
+        return embeddings              
 
     """
         Remove embeddings for a given collection, with given input.
     """
-    def remove_embeddings(self, collection_name, ids=None, where=None):
+    def remove_embeddings_for_attribute(self, datatype, att, ids=None, where=None):
         if ids == None and where == None:
             raise ChromaError("Error: attempted to remove embeddings without specified ids or where filter.")
-        collection = self.get_collection(collection_name)
+        
+        print(f"REMOVING EMBEDDINGS FOR {datatype}_{att}")
+        print("IDS:")
+        print(ids)
+        print("WHERE:")
+        print(where)
+        print("\n")
+
+        collection = self.get_collection(datatype, att)
         collection.delete(ids=ids, where=where)
 
     """
-        Remove embeddings for a list of given usernames.
+        Remove all embeddings for a specified datatype, with a given id list
     """
-    def remove_user_profile_embeddings(self, usernames):
-        self.remove_embeddings("user_abouts", ids=usernames)
-        for username in usernames:
-            self.remove_embeddings("user_text_samples", where={"username": username})
-            self.remove_embeddings("user_beliefs", where={"username": username})
-            self.remove_embeddings("user_interests", where={"username": username})
-
-
-    """
-        Remove embeddings for a list of post ids.
-    """
-    def remove_post_embeddings(self, post_ids):
-        str_ids = [str(post_id) for post_id in post_ids]
-        self.remove_embeddings("post_titles", ids=str_ids)
-        self.remove_embeddings("post_text_contents", ids=str_ids)
-        self.remove_embeddings("post_url_contents", ids=str_ids)
+    def remove_embeddings_for_datatype(self, datatype, id_list):
+        datatype_atts = [att for att in self.atts if att["datatype"] == datatype]
+        for att in datatype_atts:
+            if att["list"]:
+                for i in id_list:
+                    self.remove_embeddings_for_attribute(att["datatype"], att["name"], where={"query_att": str(i)})
+            else:
+                self.remove_embeddings_for_attribute(att["datatype"], att["name"], ids=[str(i) for i in id_list]) 
 
     """
-        Remove embeddings for a list of comment ids.
+        Update embeddings for a given attribute in a given dict list.
+        If the attribute is a list attribute, since the IDs are random,
+        all old ones are just removed and new ones are inserted as new.
     """
-    def remove_comment_embeddings(self, comment_ids):
-        str_ids = [str(comment_id) for comment_id in comment_ids]
-        self.remove_embeddings("comment_text_contents", ids=str_ids)
+    def update_embeddings_for_attribute(self, datatype, att, id_att, is_list_att, dict_list):
+        if is_list_att:
+            for d in dict_list:
+                self.remove_embeddings_for_attribute(datatype, att, where={"query_att": d[id_att]})
+            self.embed_attribute(datatype, att, id_att, is_list_att, dict_list)
+        else:
+            self.embed_attribute(datatype, att, id_att, is_list_att, dict_list, update=True)
+
+    """
+        Update embeddings for a given datatype for a given list of dicts.
+    """
+    def update_embeddings_for_datatype(self, datatype, dict_list, atts=None):
+        datatype_atts = [att for att in self.atts if att["datatype"] == datatype and (True if atts == None else (att["name"] in atts))]
+        for att in datatype_atts:
+            self.update_embeddings_for_attribute(att["datatype"], att["name"], self.get_id_att(datatype), att["list"], dict_list)
+    
