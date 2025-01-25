@@ -452,23 +452,6 @@ class CommentError(Exception):
         super().__init__(message)
 
 class Comment(Item):
-    def __init__(self, comment_id, sqlite_atts_dict=None, sqlite_db=None, chroma_db=None):
-        self._DEBUG_IGNORE_CHECK = utils.fetch_env_var("DEBUG_IGNORE_CHECK") != '0'
-
-        self.has_sqlite_atts = False
-        self.has_embeddings = False
-
-        print(f"Loading comment with id {comment_id}...")
-
-        self.id = comment_id
-
-        if sqlite_atts_dict != None:
-            self._init_from_sqlite_atts(sqlite_atts_dict)
-        if sqlite_db != None:
-            self._load_from_sqlite(sqlite_db)
-        if chroma_db != None:
-            self._load_from_chroma(chroma_db)
-
     """
         Initilaize the class from a dict containing all of the attributes from the sqlite table.
     """

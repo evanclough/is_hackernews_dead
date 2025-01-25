@@ -19,10 +19,8 @@ class UserPool:
         self.usernames = username_list
 
     def __str__(self):
-        contents =  f"""
-        User pool {self.name}:
-            Number of users: {len(self.usernames)}
-        """
+        contents =  "User Pool:\n"
+        contents += "\t" + f"Contains {len(self.usernames)} users." + "\n"
         return contents
 
     def print_usernames(self):

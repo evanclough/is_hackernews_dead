@@ -76,15 +76,6 @@ class ChromaDB:
             print(f"Attempted to create embeddings of {datatype}_{att} for ids {ids} with empty list of documents. Returning...")
             return
 
-        print(f"{'UPDATING' if update else 'CREATING'} EMBEDDINGS FOR {datatype}_{att} ")
-        print("DOCUMENTS:")
-        print(documents)
-        print("IDS:")
-        print(ids)
-        print("METADATAS:")
-        print(metadatas)
-        print("\n")
-
         collection = self.get_collection(datatype, att)
 
         operation = collection.update if update else collection.add
@@ -143,13 +134,6 @@ class ChromaDB:
     def remove_embeddings_for_attribute(self, datatype, att, ids=None, where=None):
         if ids == None and where == None:
             raise ChromaError("Error: attempted to remove embeddings without specified ids or where filter.")
-        
-        print(f"REMOVING EMBEDDINGS FOR {datatype}_{att}")
-        print("IDS:")
-        print(ids)
-        print("WHERE:")
-        print(where)
-        print("\n")
 
         collection = self.get_collection(datatype, att)
         collection.delete(ids=ids, where=where)

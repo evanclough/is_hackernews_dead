@@ -4,6 +4,8 @@
 import os
 import json
 import pathlib
+import shutil
+
 
 from dotenv import load_dotenv
 
@@ -34,6 +36,10 @@ def create_directory(path):
 def check_directory_exists(path):
     directory_path = pathlib.Path(path)
     return directory_path.is_dir()
+
+
+def copy_directory(source, destination):
+    shutil.copytree(source, destination)
 
 
 """

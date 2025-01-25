@@ -1,0 +1,44 @@
+[
+    {
+        "username": "test_user_1",
+        "about": "test about",
+        "karma": 4,
+        "created": "12354",
+        "user_class": "test",
+        "post_ids": [],
+        "comment_ids": [],
+        "favorite_post_ids": [],
+        "text_samples": ["test123", "test1443"],
+        "interests": ["test515123", "tes223t1443"],
+        "beliefs": ["test124123", "test1443"],
+        "misc_json": []
+    },
+    {
+        "username": "test_user_2",
+        "about": "test about",
+        "karma": 4,
+        "created": "12354",
+        "user_class": "test",
+        "post_ids": [],
+        "comment_ids": [],
+        "favorite_post_ids": [],
+        "text_samples": ["test123", "test1443"],
+        "interests": ["test515123", "tes223t1443"],
+        "beliefs": ["test124123", "test1443"],
+        "misc_json": []
+    },
+    {
+        "username": "test_user_3",
+        "about": "test about",
+        "karma": 4,
+        "created": "12354",
+        "user_class": "test",
+        "post_ids": [],
+        "comment_ids": [],
+        "favorite_post_ids": [],
+        "text_samples": ["test123", "test1443"],
+        "interests": ["test515123", "tes223t1443"],
+        "beliefs": ["test124123", "test1443"],
+        "misc_json": []
+    }
+]

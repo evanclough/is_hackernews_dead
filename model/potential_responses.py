@@ -137,11 +137,11 @@ class PotentialResponseTree:
     """
         Fetch the full contents of this leaf with data from given sources.
     """
-    def fetch_contents(self, sqlite_db=None, chroma_db=None):
+    def fetch_contents(self, sqlite_db=None, chroma_db=None, load_author=False):
         if self.is_root:
-            contents = classes.Post(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db)
+            contents = classes.Post(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False)
         else:
-            contents = classes.Comment(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db)
+            contents = classes.Comment(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False)
 
         return contents
         
@@ -242,6 +242,11 @@ class PotentialResponseForest:
         self.name = name
         self.roots = [PotentialResponseTree(prt, is_root=True) for prt in prf]
     
+    def __str__(self):
+        contents = "Potential Response Forest:\n"
+        contents += "\t" + f"Contains {len(self.roots)} roots.\n"
+        return contents
+        
     def get_roots(self):
         return self.roots
 

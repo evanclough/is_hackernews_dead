@@ -27,6 +27,7 @@ class Dataset:
 
         self.name = name
         self.root_dataset_path = utils.fetch_env_var("ROOT_DATASET_PATH")
+        self.has_chroma = False
 
         if use_openai_client:
             self.openai_client = OpenAI()
@@ -85,7 +86,7 @@ class Dataset:
                 user_favorite_post_dicts = [post.get_sqlite_att_dict() for post in user_profile.favorite_posts]
                 self.chroma_db.embed_datatype("post", user_favorite_post_dicts)
 
-        self.prf_path = self.dataset_path  + "contentStringLists.json"
+        self.prf_path = self.dataset_path  + "prf.json"
         prf = utils.read_json(self.prf_path)
         self.prf = potential_responses.PotentialResponseForest(self.name, prf)
         if init_chroma:
@@ -98,6 +99,8 @@ class Dataset:
             comments = [item.fetch_contents(sqlite_db=self.sqlite_db) for item in all_items if not item.get_is_root()]
             comment_dicts = [comment.get_sqlite_att_dict() for comment in comments]
             self.chroma_db.embed_datatype("comment", comment_dicts)
+
+            self.has_chroma = True
 
         print(f"Successfully initialized dataset {self.name} from existing dataset at {self.dataset_path}.")
 
@@ -121,12 +124,13 @@ class Dataset:
 
         self.chroma_db_path = self.dataset_path + ".chroma"
         self.chroma_db = chroma_db.ChromaDB(self.chroma_db_path, create=True)
+        self.has_chroma = True
 
         self.username_list_path = self.dataset_path + "usernames.json"
         utils.write_json([], self.username_list_path)
         self.user_pool = user_pool.UserPool(self.name, [])
 
-        self.prf_path = self.dataset_path + "contentStringLists.json"
+        self.prf_path = self.dataset_path + "prf.json"
         utils.write_json([], self.prf_path)
         self.prf = potential_responses.PotentialResponseForest(self.name, [])
 
@@ -166,29 +170,30 @@ class Dataset:
         utils.write_json(current_prf, self.prf_path)
 
     """
-        Print the profile of a given username.
+        Get the string representation of a given username.
     """
-    def print_user_profile(self, username):
+    def user_profile_str(self, username):
         user_profile = self.user_pool.fetch_user_profile(username, sqlite_db=self.sqlite_db, chroma_db=self.chroma_db)
-        print(user_profile)
+        return str(user_profile)
     
     """
-        Print the contents of a potential response item, given its id.
+        Get the string representation of a potential response item, given its id.
     """
-    def print_item(self, item_id):
+    def item_str(self, item_id):
         item = self.prf.get_item(item_id)
         item_contents = item.fetch_contents(sqlite_db=self.sqlite_db)
-        print(item_contents)
+        return str(item_contents)
 
     """
-        Print the contents of a full branch of a potential response item, given its id.
+        Get the string representation of a full branch of a potential response item, given its id.
     """
-    def print_branch(self, item_id):
+    def branch_str(self, item_id):
         branch = self.prf.get_branch(item_id)
         branch_content = [item.fetch_contents(sqlite_db=self.sqlite_db) for item in branch]
-        print(f"Full branch of item {item_id}:")
+        contents  = f"Full branch of item {item_id}:" + "\n"
         for item_content in branch_content:
-            print(item_content)
+            contents += "\t" + str(item_content) + "\n"
+        return contents
 
     """
         Add a set of users to the dataset, given a list of attribute dicts.
@@ -207,8 +212,9 @@ class Dataset:
             print("Putting into sqlite...")
             self.sqlite_db.insert_user_profiles(user_dict_list, check_submission_history=check_submission_history) 
 
-            print("Generating embeddings...")
-            self.chroma_db.embed_datatype("user_profile", user_dict_list)
+            if self.has_chroma:
+                print("Generating embeddings...")
+                self.chroma_db.embed_datatype("user_profile", user_dict_list)
 
             self.write_current_username_list()
 
@@ -252,8 +258,9 @@ class Dataset:
             print("Removing from sqlite...")
             self.sqlite_db.remove_items("userProfiles", username_list)
 
-            print("Removing embeddings...")
-            self.chroma_db.remove_embeddings_for_datatype("user_profile", username_list)
+            if self.has_chroma:
+                print("Removing embeddings...")
+                self.chroma_db.remove_embeddings_for_datatype("user_profile", username_list)
 
             self.user_pool.remove_usernames(username_list)
 
@@ -289,8 +296,9 @@ class Dataset:
             print("Putting into sqlite...")
             self.sqlite_db.insert_posts(post_dict_list)
 
-            print("Generating embeddings...")
-            self.chroma_db.embed_datatype("post", post_dict_list)
+            if self.has_chroma:
+                print("Generating embeddings...")
+                self.chroma_db.embed_datatype("post", post_dict_list)
 
             self.write_current_prf()
 
@@ -312,8 +320,8 @@ class Dataset:
         try:
 
             print("Removing root posts:")
-            for post_dict in post_dict_list:
-                print(post_dict["id"])
+            for post_id in post_ids:
+                print(post_id)
             print("from the dataset...")
 
             all_kid_ids = []
@@ -341,16 +349,17 @@ class Dataset:
             print("Removing from sqlite...")
             self.sqlite_db.remove_items("posts", post_ids)
 
-            print("Removing embeddings...")
-            self.chroma_db.remove_embeddings_for_datatype("post", post_ids)
+            if self.has_chroma:
+                print("Removing embeddings...")
+                self.chroma_db.remove_embeddings_for_datatype("post", post_ids)
 
             self.prf.remove_roots(post_ids)
 
             self.write_current_prf()
 
             print("Successfully removed root posts with ids:")
-            for post_dict in post_dict_list:
-                print(post_dict["id"])
+            for post_id in post_ids:
+                print(post_id)
             print("from the dataset.")
 
             return True
@@ -378,8 +387,9 @@ class Dataset:
             print("Putting into sqlite...")
             self.sqlite_db.insert_comments(leaf_dict_list)
 
-            print("Generating embeddings...")
-            self.chroma_db.embed_datatype("comment", leaf_dict_list)
+            if self.has_chroma:
+                print("Generating embeddings...")
+                self.chroma_db.embed_datatype("comment", leaf_dict_list)
 
             self.write_current_prf()
 
@@ -443,8 +453,9 @@ class Dataset:
             print("Removing from sqlite...")
             self.sqlite_db.remove_items("comments", unique_comment_ids_to_remove)
 
-            print("Removing embeddings...")
-            self.chroma_db.remove_embeddings_for_datatype("comment", unique_comment_ids_to_remove)
+            if self.has_chroma:
+                print("Removing embeddings...")
+                self.chroma_db.remove_embeddings_for_datatype("comment", unique_comment_ids_to_remove)
 
             self.prf.remove_items(comment_ids)
 
