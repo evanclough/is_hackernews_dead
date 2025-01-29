@@ -6,6 +6,7 @@
 from dataset import Dataset
 import utils
 import sys
+import functools
 
 """
     Create a new dataset from scratch.
@@ -29,20 +30,33 @@ def _copy_dataset(source_name, destination_name):
     Slice a PRT in the dataset, given its root ID, and a starting and ending
     index of kids to include.
 """
-def _slice_prt(dataset_name, root_id, start_index, end_index, update_profile, copy):
+def _slice_prt(dataset_name, root_id, start_index, end_index, update_profile, remove_users, copy):
     if copy != "NO":
         _copy_dataset(dataset_name, copy)
         dataset_name = copy
     dataset = Dataset(copy, existing_dataset_name=dataset_name)
     root = dataset.prf.get_item(int(root_id))
+    all_items_in_root = root.get_flattened_descendants()
+    all_usernames_in_root = [item.fetch_contents(sqlite_db=dataset.sqlite_db).by for item in all_items_in_root]
+
     kids = root.get_kids()
     kid_ids_to_remove = [kid.get_id() for i, kid in enumerate(kids) if i < int(start_index) or i >= int(end_index)]
     dataset.remove_comments(kid_ids_to_remove, update_author_profile=(update_profile == "YES"))
 
+    if remove_users == "YES":
+        kept_kids = [kid for i, kid in enumerate(kids) if i >= int(start_index) and i < int(end_index)]
+        all_items_in_kept_kids = functools.reduce(lambda acc, i: [*acc, *i], [kid.get_flattened_descendants() for kid in kept_kids], [root])
+        all_usernames_in_kept_kids = [item.fetch_contents(sqlite_db=dataset.sqlite_db).by for item in all_items_in_kept_kids]
+        
+        usernames_to_remove = [username for username in all_usernames_in_root if not (username in all_usernames_in_kept_kids)]
+
+        dataset.remove_users(usernames_to_remove, remove_posts=True, remove_comments=True)
+
 """
     Slice the PRF of a given dataset by a starting and ending index.
+    Remove all users not present in the prf.
 """
-def _slice_prf(dataset_name, start_index, end_index, update_profile, copy):
+def _slice_prf(dataset_name, start_index, end_index, update_profile, remove_users, copy):
     if copy != "NO":
         _copy_dataset(dataset_name, copy)
         dataset_name = copy
@@ -50,6 +64,16 @@ def _slice_prf(dataset_name, start_index, end_index, update_profile, copy):
     roots = dataset.prf.get_roots()
     root_ids_to_remove = [root.get_id() for i, root in enumerate(roots) if i < int(start_index) or i >= int(end_index)]
     dataset.remove_root_posts(root_ids_to_remove, update_author_profile=(update_profile == "YES"))
+    if remove_users == "YES":
+        kept_roots = [root for i, root in enumerate(roots) if i >= int(start_index) and i < int(end_index)]
+        all_items_in_kept_roots = functools.reduce(lambda acc, r: [*acc, *r], [root.get_flattened_descendants() for root in kept_roots], [])
+        all_usernames_in_kept_roots = [item.fetch_contents(sqlite_db=dataset.sqlite_db).by for item in all_items_in_kept_roots]
+        
+        all_usernames = dataset.user_pool.get_usernames()
+        usernames_to_remove = [username for username in all_usernames if not (username in all_usernames_in_kept_roots)]
+
+        dataset.remove_users(usernames_to_remove, remove_posts=True, remove_comments=True)
+
 
 """
     Add a list of new users to the user pool of a given dataset, 
