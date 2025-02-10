@@ -261,9 +261,9 @@ function recFlattenComments(commentList){
     to ensure during runtime that all ids map to comments in the database.
 */
 function extractContentStringTree(originalItems, completedCommentIDs){
-    const filteredItems = originalItems.filter(i => i?.item?.id !== undefined && completedCommentIDs.filter(c => i.item.id).length !== 0);
+    const filteredItems = originalItems.filter(i => i?.item?.id !== undefined && i?.item?.parent !== undefined && completedCommentIDs.filter(c => i.item.id).length !== 0);
 
-    const csLists = filteredItems.map(i => {return {id: i.item.id, kids: i?.item?.childComments !== undefined ? extractContentStringTree(i.item.childComments, completedCommentIDs) : []}});
+    const csLists = filteredItems.map(i => {return {id: i.item.id, parent: i.item.parent, kids: i?.item?.childComments !== undefined ? extractContentStringTree(i.item.childComments, completedCommentIDs) : []}});
 
     return csLists;
 }
