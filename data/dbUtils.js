@@ -63,7 +63,6 @@ async function insertPosts(dbPath, posts){
             score INTEGER,
             time TEXT,
             title TEXT,
-            descendants INTEGER,
             text TEXT,
             url TEXT,
             urlContent TEXT
@@ -73,13 +72,13 @@ async function insertPosts(dbPath, posts){
     await db.run(createPostsTableQuery);
 
     const insertPostsQuery = `
-            INSERT OR IGNORE INTO posts (by, id, score, time, title, descendants, text, url, urlContent)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO posts (by, id, score, time, title, text, url, urlContent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     for(let i = 0; i < posts.length; i++){
         try {
-            await db.run(insertPostsQuery, [posts[i].by, posts[i].id, posts[i].score, posts[i].time, posts[i].title, posts[i].descendants, posts[i].text, posts[i].url, posts[i].urlContent]);
+            await db.run(insertPostsQuery, [posts[i].by, posts[i].id, posts[i].score, posts[i].time, posts[i].title, posts[i].text, posts[i].url, posts[i].urlContent]);
         }catch (err){
             console.log(posts[i]);
             console.log(`Error inserting posts ${err}`);

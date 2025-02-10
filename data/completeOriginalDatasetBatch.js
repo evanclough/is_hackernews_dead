@@ -23,7 +23,6 @@ function completeOriginalPost(originalPost){
         score: originalPost.item.score,
         time: originalPost.item.time,
         title: originalPost.item.title,
-        descendants: originalPost.item.descendants ?? 0,
         text: originalPost.item.text ?? "",
         url: originalPost?.linkContent?.link ?? "",
         urlContent: originalPost?.linkContent?.content ?? "",
