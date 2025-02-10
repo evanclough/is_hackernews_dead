@@ -23,9 +23,10 @@ function completeOriginalPost(originalPost){
         score: originalPost.item.score,
         time: originalPost.item.time,
         title: originalPost.item.title,
+        descendants: originalPost.item.descendants ?? 0,
         text: originalPost.item.text ?? "",
         url: originalPost?.linkContent?.link ?? "",
-        urlContent: originalPost?.linkContent?.content ?? ""
+        urlContent: originalPost?.linkContent?.content ?? "",
     }
     return completePostObject;
 }
@@ -78,7 +79,8 @@ function completeOriginalComment(originalComment){
         by: originalComment.item.by,
         id: originalComment.item.id,
         text: originalComment.item.text,
-        time: originalComment.item.time
+        time: originalComment.item.time,
+        parent: originalComment.item.parent
     }
 
     return completeCommentObject;
@@ -97,10 +99,11 @@ function completeOriginalCommentList(originalCommentList){
         const byUndefined = originalCommentList[i].item?.by === undefined;
         const timeUndefined = originalCommentList[i].item?.time === undefined;
         const textUndefined = originalCommentList[i].item?.text === undefined;
+        const parentUndefined = originalCommentList[i].item?.parent === undefined;
         const typeUndefined = originalCommentList[i].item?.type === undefined;
         const notOfTypeComment = originalCommentList[i].item?.type !== "comment";
 
-        const errorConditions = {anticipatedErrorCondition, itemUndefined, idUndefined, byUndefined, timeUndefined, textUndefined, typeUndefined, notOfTypeComment};
+        const errorConditions = {anticipatedErrorCondition, itemUndefined, idUndefined, byUndefined, timeUndefined, textUndefined, parentUndefined, typeUndefined, notOfTypeComment};
 
         const filterCondition = Object.values(errorConditions).reduce((acc, e) => acc || e, false);
 
@@ -146,10 +149,7 @@ async function completeUserProfile(scrapedUserObject){
             created: originalUser.created,
             postIDs: [],
             commentIDs: [],
-            favoritePostIDs: [],
-            textSamples: [],
-            interests: [],
-            beliefs: []
+            favoritePostIDs: []
         },
         posts: [],
         comments: []
@@ -163,7 +163,7 @@ async function completeUserProfile(scrapedUserObject){
     console.log(`Grabbing favorite posts for user ${originalUser.username}...`);
     //grab raw post items
 
-    const MAX_FAVORITE_POSTS_PER_USER = 100;
+    const MAX_FAVORITE_POSTS_PER_USER = 50;
 
     const originalFavoritePosts = await hnAPIFunctions.grabListOfItems(rawFavoritePostIDs.slice(0, MAX_FAVORITE_POSTS_PER_USER), 400);
     //fill link content
@@ -179,7 +179,7 @@ async function completeUserProfile(scrapedUserObject){
     //retrieve the body of IDs from their post history.
 
     console.log(`Grabbing submissions from user ${originalUser.username}...`);
-    const MAX_SUBMISSIONS_PER_USER = 100;
+    const MAX_SUBMISSIONS_PER_USER = 50;
 
     const submissions = await hnAPIFunctions.grabListOfItems(originalUser.submitted.slice(0, MAX_SUBMISSIONS_PER_USER), 100);
 
@@ -388,7 +388,7 @@ async function completeBatchOfOriginalDataset(originalDatasetName, completedData
     await dbUtils.insertComments(dbPath, comments.flat(Infinity));
 
     const completedUsernamesPath = `${batchDirPath}/usernames.json`;
-    const completedContentStringsPath = `${batchDirPath}/contentStringLists.json`;
+    const completedContentStringsPath = `${batchDirPath}/prf.json`;
 
     const usernamesExists = await utilities.checkFileIfExists(completedUsernamesPath);
     const contentStringsExists = await utilities.checkFileIfExists(completedContentStringsPath);
@@ -419,7 +419,6 @@ async function completeBatchOfOriginalDataset(originalDatasetName, completedData
 
         await utilities.writeJsonToFile(incompleteOriginalDataset, originalDatasetPath);
 
-        console.log(contentStringLists);
         console.log(`Successfully completed ${usernames.length} user records and ${contentStringLists.length} content strings from dataset ${originalDatasetName}`);
         return false;
     }else {

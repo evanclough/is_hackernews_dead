@@ -211,7 +211,137 @@ Future Ideas:
 - Create human feedback mechanism to be run with the live port
 
 
+User Feature Extraction:
+First, users should be in a database, so retrieving them during training is faster than searching the json, and also for RAG.
+Post history and other text stuff can be embedded for RAG during generation time.
+
+But to start the schema:
+
+What I have from HN:
+ - user: {
+        "about" : "This is a test",
+        "created" : 1173923446,
+        "id" : "jl",
+        "karma" : 2937,
+        "submitted" : [ 8265435, ... ]
+    }
+
+Can do immediately: fetch items in submitted list
+
+Probably don't need entire post history of necessary, could take that at basis
+
+The schema needs to consist of things that I can replicate from scratch in creating a bot.
+
+These profiles will be created initially for a given user pool, but could be updated over time.
+
+Would be good to keep it minimal to start:
+
+user {
+    public facing:
+        {
+            id: username,
+            karma,
+            created,
+            about?,
+            submitted,
+        }
+    private:
+        {
+            post_frequency,
+            comment_frequency,
+            text_samples:   a few sentences as an example for the user's grammar/cadence, 
+                            to be passed into LLM call for generation,
+            interests:      A list of strings on topics the user is interested in, ranked.
+                            LLM Prompt: "Given this user's post history, please give their top five topics of interest, in JSON format, as a list of strings.
+            beliefs:        A list of strings of beliefs the user has, ranked.
+        }
+
+}
+
+LLM:
+Gonna start with OpenAI, but swapping it out / testing others in the long run would be trivial
+
+GPT-4o pricing:
+$0.00250 / 1K input tokens
+
+1/10: 
+
+The LLM shit should be done in python.
+
+Create a database, finish the scraping pipeline to do all non-LLM work in javascript, 
+put all in database, then LLM shit in python, then we ready
+
+users table, posts table, comments table,
+user pools can be left as usernames, used to pull from database in running the model.
+content strings will be converted to a list of IDs to pull from database
+
+when im ready:
+make users table
+finish js pipeline to put all user shit in there
+make posts/comments table
+finish js pipeline to put all post/comment shit in there
+write python pipelines to use LLMs for final feature extraction from user pools and content string list into database
+run the model!
+
+1/16:
+
+finally time to get the llm involved
+
+hopefully done with the data module, code isn't great but it works
+and im tired of writing javascript
+
+python intake of the sqlite datasets is fine. 
+will need to add a few columns.
+
+next steps:
+
+get LLM involved in python to generate necessary features with that
+populate in sqlite -> make embeddings
+figure out embedding storage, should be pretty easy with the way i have things set up now,
+just add to chroma in some easily accessible way
+
+then write function to add a new comment to the dataset during a run once thats figured out
+
+write function to finally make the initial feature set for each user/potential response
+
+(come up with a better naming scheme for the things people can potentially respond to!)
+(and for the dataset shit eventually too its a mess rn)
+
+try out different models for when
+
+make rag system for generation / prompt engineering for what model and evaluate those results, will be fun
+make an evaluation system for response quality for testing.
+
+do a test run to evaluate results
+
+make frontend
 
 
+1/21:
+it was not in fact time to get the LLM involved.
+however now it may be.
+the dataset class works, now finally get to do some feature extraction from the original data
+the things i can think of immediately would be:
 
+curating the link content for posts. there aren't many of them, it could be done manually,
+but would also be cool to have LLM summarization as an option.
 
+filling in the user profile fields i created all that time ago
+
+that's about it for initial stuff...
+
+once i have a pipeline for doing that, 
+(and get a real complete dataset...)
+then generate embeddings and store
+and actually train.
+
+1/29 TODO:
+-remove nonexistant submissions from user history id lists
+-get rid of disallowed tokens
+-finish embedding token estimate
+-abstract feature extraction / clean code
+-switch to cheaper model for feature extraction
+-pseudocode for when/where models and do a test run of generation
+-make when model / training framework
+-do rag for what to post
+-run it! 

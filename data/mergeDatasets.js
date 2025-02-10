@@ -26,8 +26,8 @@ async function mergeDatasets(leftDataset, rightDataset, finalName){
     const leftUsernamesPath = `./completeDatasets/${leftDataset}/usernames.json`;
     const rightUsernamesPath = `./completeDatasets/${rightDataset}/usernames.json`;
 
-    const leftCSLPath = `./completeDatasets/${leftDataset}/contentStringLists.json`;
-    const rightCSLPath = `./completeDatasets/${rightDataset}/contentStringLists.json`;
+    const leftCSLPath = `./completeDatasets/${leftDataset}/prf.json`;
+    const rightCSLPath = `./completeDatasets/${rightDataset}/prf.json`;
 
     const leftUsernames = await utilities.readJsonFile(leftUsernamesPath);
     const rightUsernames = await utilities.readJsonFile(rightUsernamesPath);
@@ -40,7 +40,7 @@ async function mergeDatasets(leftDataset, rightDataset, finalName){
 
     //write final jsons
     await utilities.writeJsonToFile(mergedUsernameList, `./completeDatasets/${finalName}/usernames.json`);
-    await utilities.writeJsonToFile(mergedContentStringList, `./completeDatasets/${finalName}/contentStringLists.json`);
+    await utilities.writeJsonToFile(mergedContentStringList, `./completeDatasets/${finalName}/prf.json`);
 
     //merge the contents of the two databases
     const leftDBPath = `./completeDatasets/${leftDataset}/data.db`;
@@ -100,7 +100,7 @@ async function mergeDirectory(dirName){
     await mergeDatasetList(completeDatasets, tempMergePath);
 
     await fs.copyFile(`./completeDatasets/${tempMergePath}/usernames.json`, `./completeDatasets/${dirName}/usernames.json`);
-    await fs.copyFile(`./completeDatasets/${tempMergePath}/contentStringLists.json`, `./completeDatasets/${dirName}/contentStringLists.json`);
+    await fs.copyFile(`./completeDatasets/${tempMergePath}/prf.json`, `./completeDatasets/${dirName}/prf.json`);
     await fs.copyFile(`./completeDatasets/${tempMergePath}/data.db`, `./completeDatasets/${dirName}/data.db`);
     await fs.rm(`./completeDatasets/${tempMergePath}`, { recursive: true, force: true });
 }

@@ -18,30 +18,28 @@ async function insertUserProfiles(dbPath, userProfiles){
 
     const createUserProfilesTableQuery = `
         CREATE TABLE IF NOT EXISTS userProfiles (
-            username TEXT NOT NULL,
+            username TEXT PRIMARY KEY,
             about TEXT,
             karma INTEGER,
             created TEXT,
-            postIDs TEXT,        -- Store JSON array of integers
-            commentIDs TEXT,     -- Store JSON array of integers
-            favoritePostIDs TEXT,-- Store JSON array of integers
-            textSamples TEXT,    -- Store JSON array of strings
-            interests TEXT,      -- Store JSON array of strings
-            beliefs TEXT,        -- Store JSON array of strings
-            PRIMARY KEY (username)
+            userClass TEXT,
+            postIDs TEXT,
+            commentIDs TEXT,
+            favoritePostIDs TEXT,
+            miscJson TEXT
         );
     `;
 
     await db.run(createUserProfilesTableQuery);
 
     const insertUserQuery = `
-        INSERT OR IGNORE INTO userProfiles (username, about, karma, created, postIDs, commentIDs, favoritePostIDs, textSamples, interests, beliefs)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO userProfiles (username, about, karma, created, userClass, postIDs, commentIDs, favoritePostIDs, miscJson)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     for(let i = 0; i < userProfiles.length; i++){
         try {
-            await db.run(insertUserQuery, [userProfiles[i].username, userProfiles[i].about, userProfiles[i].karma, userProfiles[i].created, JSON.stringify(userProfiles[i].postIDs), JSON.stringify(userProfiles[i].commentIDs), JSON.stringify(userProfiles[i].favoritePostIDs), JSON.stringify(userProfiles[i].textSamples), JSON.stringify(userProfiles[i].interests), JSON.stringify(userProfiles[i].beliefs)]);
+            await db.run(insertUserQuery, [userProfiles[i].username, userProfiles[i].about, userProfiles[i].karma, userProfiles[i].created, "real", JSON.stringify(userProfiles[i].postIDs), JSON.stringify(userProfiles[i].commentIDs), JSON.stringify(userProfiles[i].favoritePostIDs), JSON.stringify({})]);
         }catch (err){
             console.log(`Error inserting user profiles ${err}`);
         }
@@ -61,27 +59,29 @@ async function insertPosts(dbPath, posts){
 
     const createPostsTableQuery = `
         CREATE TABLE IF NOT EXISTS posts   (
-            by TEXT ,      -- The user who created the post (string)
-            id INTEGER PRIMARY KEY, -- The unique identifier for the post (integer)
-            score INTEGER,          -- The score of the post (integer)
-            time TEXT,              -- The time the post was created (string)
-            title TEXT,             -- The title of the post (string)
-            text TEXT,              -- The text content of the post (string)
-            url TEXT,               -- The URL related to the post (string)
-            urlContent TEXT         -- The content at the URL (string)
+            by TEXT,
+            id INTEGER PRIMARY KEY,
+            score INTEGER,
+            time TEXT,
+            title TEXT,
+            descendants INTEGER,
+            text TEXT,
+            url TEXT,
+            urlContent TEXT,
+            miscJson TEXT
         );
     `;
 
     await db.run(createPostsTableQuery);
 
     const insertPostsQuery = `
-            INSERT OR IGNORE INTO posts (by, id, score, time, title, text, url, urlContent)
-            VALUES (?, ?, ?, ?, ?,?,?,?)
+            INSERT OR IGNORE INTO posts (by, id, score, time, title, descendants, text, url, urlContent, miscJson)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     for(let i = 0; i < posts.length; i++){
         try {
-            await db.run(insertPostsQuery, [posts[i].by, posts[i].id, posts[i].score, posts[i].time, posts[i].title, posts[i].text, posts[i].url,posts[i].urlContent ]);
+            await db.run(insertPostsQuery, [posts[i].by, posts[i].id, posts[i].score, posts[i].time, posts[i].title, posts[i].descendants, posts[i].text, posts[i].url, posts[i].urlContent, JSON.stringify({})]);
         }catch (err){
             console.log(posts[i]);
             console.log(`Error inserting posts ${err}`);
@@ -101,23 +101,25 @@ async function insertComments(dbPath, comments) {
 
     const createCommentsTableQuery = `
         CREATE TABLE IF NOT EXISTS comments (
-            by TEXT,      -- The user who created the post (string)
-            id INTEGER PRIMARY KEY, -- The unique identifier for the post (integer)
-            time TEXT,              -- The time the post was created (string)
-            text TEXT              -- The text content of the post (string)
+            by TEXT,
+            id INTEGER PRIMARY KEY,
+            time TEXT,
+            text TEXT,
+            parent INTEGER,
+            miscJson TEXT
         );
     `;
 
     await db.run(createCommentsTableQuery);
 
     const insertCommentsQuery = `
-            INSERT OR IGNORE INTO comments (by, id, time, text)
-            VALUES (?, ?, ?, ?)
+            INSERT OR IGNORE INTO comments (by, id, time, text, parent, miscJson)
+            VALUES (?, ?, ?, ?, ?, ?)
     `;
 
     for(let i = 0; i < comments.length; i++){
         try {
-            await db.run(insertCommentsQuery, [comments[i].by, comments[i].id, comments[i].time,comments[i].text]);
+            await db.run(insertCommentsQuery, [comments[i].by, comments[i].id, comments[i].time, comments[i].text, comments[i].parent, JSON.stringify({})]);
         }catch (err){
             console.log(`Error inserting comments ${err}`);
         }

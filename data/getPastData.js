@@ -30,7 +30,7 @@ async function main(){
         day: endDay
     };
 
-    const k = 2;
+    const k = 1;
     const dateRanges = utilities.getDateRange(startDate, endDate).reduce((acc, date) => acc.length != 0 && acc[0].length < k ? [[...acc[0], date], ...acc.slice(1)] : [[date], ...acc], []);
 
     for(let i = 0; i < dateRanges.length; i++){
