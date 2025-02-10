@@ -1,5 +1,5 @@
 """
-    Unit tests for the dataset class's interaction with sqlite.
+    General unit tests for the dataset class.
 """
 
 import unittest
@@ -8,26 +8,54 @@ import json
 
 import utils
 import dataset
-import feature_extraction
 
-class SqliteTests(unittest.TestCase):
+"""
+    Tests for initializing the dataset with various options.
+"""
+class InitTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        
-        cls.test_dataset_name = "SCRATCH_TEST"
+        cls.test_dataset_name = "TEST_DATASET"
+        print(f"Running tests on dataset {cls.test_dataset_name}...")
 
-        cls.dataset = dataset.Dataset(cls.test_dataset_name, existing_dataset_name=cls.test_dataset_name, use_openai_client=True)
-        cls.dataset.initialize_for_run()
+    """
+        Test initialization of an existing dataset without a chroma db.
+    """
+    def test_init_no_chroma(self):
 
+        test_dataset = dataset.Dataset(self.test_dataset_name, existing_dataset_name=self.test_dataset_name, verbose=True)
+
+        self.assertIsNotNone(test_dataset)
+
+    """
+        Test the initialization of a chroma db and creation of embeddings
+         for an existing dataset without a chroma db.
+    """
+    def test_init_create_chroma(self):
+        test_dataset = dataset.Dataset(self.test_dataset_name, existing_dataset_name=self.test_dataset_name, init_chroma=True, verbose=True)
+
+        self.assertIsNotNone(test_dataset)
+
+"""
+    Test crud operations on a given dataset.
+    If the dataset at the designated location contains a chroma database, 
+    embeddings will be created/updated/deleted, if not, they will not.
+"""
+class CrudTests(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.test_dataset_name = "TEST_DATASET"
+        cls.dataset = dataset.Dataset(cls.test_dataset_name, existing_dataset_name=cls.test_dataset_name, verbose=True)
         cls.insertion_num = 55555
         cls.test_username = f"test_username{cls.insertion_num}"
-        print(f"Running tests on existing dataset {cls.test_dataset_name}...")
+        print(f"Running sqlite tests on existing dataset {cls.test_dataset_name}...")
         print(f"test insertion number: {cls.insertion_num}")
 
     """
         Test the initialization of the dataset.
-        (doesn't actually do anything, really just testing the set up class method)
+        (doesn't actually do anything)
     """
     def test_init(self):
         self.assertIsNotNone(self.dataset)
@@ -35,7 +63,7 @@ class SqliteTests(unittest.TestCase):
     """
         Test inserting a new user to the user pool. (no post history)
     """
-    def test_new_user_insertion(self):
+    def test_user_insertion(self):
         user_dict = {
             "username": self.test_username,
             "about": "test about",
@@ -44,11 +72,7 @@ class SqliteTests(unittest.TestCase):
             "user_class": "test",
             "post_ids": [],
             "comment_ids": [],
-            "favorite_post_ids": [],
-            "text_samples": ["test123", "test1443"],
-            "interests": ["test515123", "tes223t1443"],
-            "beliefs": ["test124123", "test1443"],
-            "misc_json": []
+            "favorite_post_ids": []
         }
 
         self.assertTrue(self.dataset.add_users([user_dict]))
@@ -66,8 +90,7 @@ class SqliteTests(unittest.TestCase):
             "title": "test post title",
             "url": "test url",
             "url_content": "test url content",
-            "score": 123,
-            "misc_json": []
+            "score": 123
         }
 
         self.assertTrue(self.dataset.add_root_posts([post_dict]))
@@ -82,8 +105,7 @@ class SqliteTests(unittest.TestCase):
             "id": self.insertion_num + 1,
             "time": str(int(time.time())),
             "text": "test text",
-            "misc_json": [],
-            "parent_id": self.insertion_num
+            "parent": self.insertion_num
         }
 
         self.assertTrue(self.dataset.add_leaf_comments([comment_dict]))
@@ -97,8 +119,7 @@ class SqliteTests(unittest.TestCase):
             "id": self.insertion_num + 2,
             "time": str(int(time.time())),
             "text": "test text",
-            "misc_json": [],
-            "parent_id": self.insertion_num + 1
+            "parent": self.insertion_num + 1
         }
 
         self.assertTrue(self.dataset.add_leaf_comments([comment_dict]))
@@ -140,14 +161,14 @@ class SqliteTests(unittest.TestCase):
         Test removing a comment from the dataset, and also removing it from its author's profile.
     """
     def test_full_comment_removal(self):
-        comment_to_remove = self.insertion_num + 2
+        comment_to_remove = self.insertion_num + 1
         self.assertTrue(self.dataset.remove_comments([comment_to_remove], update_author_profile=True))
 
     """
         Run all of the insertion tests in the necessary order.
     """
     def test_insertion(self):
-        self.test_new_user_insertion()
+        self.test_user_insertion()
         self.test_post_insertion()
         self.test_comment_insertion_to_root()
         self.test_comment_insertion_to_leaf()
@@ -159,37 +180,6 @@ class SqliteTests(unittest.TestCase):
         self.test_user_removal()
         self.test_comment_removal()
         self.test_post_removal()
-
-    """
-        Test the addition of new features to a user.
-    """
-    def test_user_feature_insertion(self):
-        self.dataset.add_misc_json_to_user_profile(self.test_username, {"testasldkj": 234})
-        self.dataset.populate_text_samples(self.test_username)
-        self.dataset.populate_beliefs(self.test_username)
-        self.dataset.populate_interests(self.test_username)
-        self.dataset.print_user_profile(self.test_username)
-
-    """
-        Test the addition of new features to an item.
-    """
-    def test_item_feature_insertion(self):
-        self.dataset.add_misc_json_to_item(self.insertion_num + 1, {"test123": 124})
-        self.dataset.print_branch(self.insertion_num + 1)
-
-    """
-        Test feature extraction
-    """
-    def test_feature_extraction(self):
-        featurex_test_username = "airstrike"
-        print(f"Testing openai feature extraction for {featurex_test_username}...")
-        user_profile = self.dataset.user_pool.fetch_user_profile(featurex_test_username,  self.dataset.sqlite_db)
-        text_samples_test = feature_extraction.get_text_samples(user_profile, self.dataset.sqlite_db, 5, self.dataset.openai_client, skip_sub_ret_errors=True)
-        print(f"text samples: {text_samples_test}")
-        beliefs_test = feature_extraction.get_beliefs(user_profile, self.dataset.sqlite_db, 5, 200, self.dataset.openai_client, skip_sub_ret_errors=True)
-        print(f"beliefs: {beliefs_test}")
-        interests_test = feature_extraction.get_interests(user_profile, self.dataset.sqlite_db, 5, self.dataset.openai_client, skip_sub_ret_errors=True)
-        print(f"interests: {interests_test}")
 
 if __name__ == '__main__':
     unittest.main()

@@ -25,19 +25,21 @@ class ChromaError(Exception):
     but looks like chroma doesnt have functionality for that. oh well.)
 """
 class ChromaDB:
-    def __init__(self, path, create=False):
+    def __init__(self, path, create=False, truncate=True, truncate_increment=4000):
         self.path = path
         self.client = chromadb.PersistentClient(path=self.path)
+        self._embedding_model = utils.fetch_env_var("EMBEDDING_MODEL")
+        self._embedding_model_max_tokens = int(utils.fetch_env_var("EMBEDDING_MODEL_MAX_TOKENS"))
+        self._truncate = truncate
+        self._truncate_increment = truncate_increment
+
         self.embedding_function = chromadb.utils.embedding_functions.OpenAIEmbeddingFunction(
                 api_key=utils.fetch_env_var("OPENAI_API_KEY"),
-                model_name=utils.fetch_env_var("EMBEDDING_MODEL")
+                model_name=self._embedding_model
         )
 
         self.atts = [
             {"datatype": "user_profile", "name": "about", "list": False},
-            {"datatype": "user_profile", "name": "text_samples", "list": True},
-            {"datatype": "user_profile", "name": "beliefs", "list": True},
-            {"datatype": "user_profile", "name": "interests", "list": True},
             {"datatype": "post", "name": "title", "list": False},
             {"datatype": "post", "name": "text", "list": False},
             {"datatype": "post", "name": "url_content", "list": False},
@@ -76,6 +78,15 @@ class ChromaDB:
             print(f"Attempted to create embeddings of {datatype}_{att} for ids {ids} with empty list of documents. Returning...")
             return
 
+        for i in range(len(documents)):
+            if utils.get_openai_token_estimate(documents[i], self._embedding_model) > self._embedding_model_max_tokens:
+                if self._truncate:
+                    print(f"Document {datatype}_{att} with id {ids[i]} exceeds the token maximum for the given embedding model. Truncating until it does...")
+                    while utils.get_openai_token_estimate(documents[i], self._embedding_model) > self._embedding_model_max_tokens:
+                        documents[i] = documents[i][:-self._truncate_increment]
+                else:
+                    raise ChromaError(f"Document with id {ids[i]} exceeds the token maximum for the given embedding model.")
+
         collection = self.get_collection(datatype, att)
 
         operation = collection.update if update else collection.add
@@ -106,7 +117,7 @@ class ChromaDB:
         datatype_atts = [att for att in self.atts if att["datatype"] == datatype]
         for att in datatype_atts:
             self.embed_attribute(att["datatype"], att["name"], self.get_id_att(datatype), att["list"], dict_list)
-    
+
     """
         Retrieve embeddings from a given collection, with specified filters.
     """

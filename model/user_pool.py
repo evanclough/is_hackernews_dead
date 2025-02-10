@@ -38,25 +38,25 @@ class UserPool:
         Get a user from this user pool of a given username, with given data sources.
         Raise an error if they're not present.
     """
-    def fetch_user_profile(self, username, sqlite_db=None, chroma_db=None, load_submissions=False):
+    def fetch_user_profile(self, username, sqlite_db=None, chroma_db=None, load_submissions=False, skip_submission_errors=False, verbose=False):
         if self.check_contains_user(username):
-            return classes.UserProfile(username, sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=load_submissions)
+            return classes.UserProfile(username, sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=load_submissions, skip_submission_errors=skip_submission_errors, verbose=verbose)
         else:
             raise UserPoolError(f"Error: attempt to get user of username {username} not present in the user pool.")
 
     """
         Fetch the profile of a list of users, given their usernames.
     """
-    def fetch_some_user_profiles(self, username_list, sqlite_db=None, chroma_db=None, load_submissions=False):
-        user_profiles = [self.fetch_user_profile(username, sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=load_submissions) for username in username_list]
+    def fetch_some_user_profiles(self, username_list, sqlite_db=None, chroma_db=None, load_submissions=False, skip_submission_errors=False, verbose=False):
+        user_profiles = [self.fetch_user_profile(username, sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=load_submissions, skip_submission_errors=skip_submission_errors, verbose=verbose) for username in username_list]
 
         return user_profiles
 
     """
         Fetch the profiles of all users in the user pool.
     """
-    def fetch_all_user_profiles(self, sqlite_db=None, chroma_db=None, load_submissions=False):
-        return self.fetch_some_user_profiles(self.usernames, sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=load_submissions)
+    def fetch_all_user_profiles(self, sqlite_db=None, chroma_db=None, load_submissions=False, skip_submission_errors=False, verbose=False):
+        return self.fetch_some_user_profiles(self.usernames, sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=load_submissions, skip_submission_errors=skip_submission_errors, verbose=verbose)
 
     """
         Check if this user pool contains a user with a given username.
@@ -89,8 +89,8 @@ class UserPool:
         Clean this user pool by checking each user and removing all
         who fail.
     """
-    def clean(self, sqlite_db, chroma_db):
-        user_profiles = self.fetch_all_user_profiles(sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=True)
+    def clean(self, sqlite_db=None, chroma_db=None, skip_submission_errors=False, verbose=False):
+        user_profiles = self.fetch_all_user_profiles(sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=True, skip_submission_errors=skip_submission_errors, verbose=verbose)
         clean_usernames = [user_profile.username for user_profile in user_profiles if user_profile.check(sqlite_db, chroma_db)]
         self.usernames = clean_usernames
     

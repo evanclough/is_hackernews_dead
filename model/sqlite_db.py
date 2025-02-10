@@ -63,27 +63,23 @@ class SqliteDB:
                 karma INTEGER,
                 created TEXT,
                 userClass TEXT,
-                postIDs TEXT,        -- Store JSON array of integers
-                commentIDs TEXT,     -- Store JSON array of integers
-                favoritePostIDs TEXT,-- Store JSON array of integers
-                textSamples TEXT,    -- Store JSON array of strings
-                interests TEXT,      -- Store JSON array of strings
-                beliefs TEXT,       -- Store JSON array of strings,
-                miscJson TEXT
+                postIDs TEXT,
+                commentIDs TEXT,
+                favoritePostIDs TEXT
             );
         """
         self.cursor.execute(create_user_profiles_query)
 
         create_posts_query = """
             CREATE TABLE IF NOT EXISTS posts   (
-                by TEXT ,      -- The user who created the post (string)
-                id INTEGER PRIMARY KEY, -- The unique identifier for the post (integer)
-                score INTEGER,          -- The score of the post (integer)
-                time TEXT,              -- The time the post was created (string)
-                title TEXT,             -- The title of the post (string)
-                text TEXT,              -- The text content of the post (string)
-                url TEXT,               -- The URL related to the post (string)
-                urlContent TEXT,         -- The content at the URL (string)
+                by TEXT,
+                id INTEGER PRIMARY KEY,
+                score INTEGER,
+                time TEXT,
+                title TEXT,
+                text TEXT,
+                url TEXT,
+                urlContent TEXT,
                 miscJson TEXT
             );
         """
@@ -91,11 +87,11 @@ class SqliteDB:
 
         create_comments_query = """
             CREATE TABLE IF NOT EXISTS comments (
-                by TEXT,      -- The user who created the post (string)
-                id INTEGER PRIMARY KEY, -- The unique identifier for the post (integer)
-                time TEXT,              -- The time the post was created (string)
-                text TEXT,              -- The text content of the post (string)
-                miscJson TEXT
+                by TEXT,
+                id INTEGER PRIMARY KEY,
+                time TEXT,
+                text TEXT,
+                parent INTEGER
             );
         """
         self.cursor.execute(create_comments_query)
@@ -122,9 +118,9 @@ class SqliteDB:
     @_with_db
     def _run_insertion_query(self, table, contents_tuple, ignore_dups=False):
         atts = {
-            "userProfiles": ["username", "about", "karma", "created", "userClass", "postIDs", "commentIDs", "favoritePostIDs", "textSamples", "interests", "beliefs", "miscJson"],
-            "posts": ["by", "id", "score", "time", "title", "text", "url", "urlContent", "miscJson"],
-            "comments": ["by", "id", "time", "text", "miscJson"]
+            "userProfiles": ["username", "about", "karma", "created", "userClass", "postIDs", "commentIDs", "favoritePostIDs"],
+            "posts": ["by", "id", "score", "time", "title", "text", "url", "urlContent"],
+            "comments": ["by", "id", "time", "text", "parent"]
         }
 
         query = f"""
@@ -289,11 +285,7 @@ class SqliteDB:
                 user_dict["user_class"],
                 json.dumps(user_dict["post_ids"]),
                 json.dumps(user_dict["comment_ids"]),
-                json.dumps(user_dict["favorite_post_ids"]),
-                json.dumps(user_dict["text_samples"]),
-                json.dumps(user_dict["interests"]),
-                json.dumps(user_dict["beliefs"]),
-                json.dumps(user_dict["misc_json"])
+                json.dumps(user_dict["favorite_post_ids"])
             ))
         
         self._run_insertion_query("userProfiles", user_profile_tuples)
@@ -312,8 +304,7 @@ class SqliteDB:
                 post_dict["title"],
                 post_dict["text"],
                 post_dict["url"],
-                post_dict["url_content"],
-                json.dumps(post_dict["misc_json"])
+                post_dict["url_content"]
             ))
 
         self._run_insertion_query("posts", post_tuples)
@@ -331,7 +322,7 @@ class SqliteDB:
                 comment_dict["id"],
                 str(comment_dict["time"]),
                 comment_dict["text"],
-                json.dumps(comment_dict["misc_json"])
+                comment_dict["parent"]
             ))
 
         self._run_insertion_query("comments", comment_tuples)

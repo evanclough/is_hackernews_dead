@@ -5,6 +5,7 @@ import os
 import json
 import pathlib
 import shutil
+import tiktoken
 
 
 from dotenv import load_dotenv
@@ -41,6 +42,9 @@ def check_directory_exists(path):
 def copy_directory(source, destination):
     shutil.copytree(source, destination)
 
+def remove_directory(path):
+    shutil.rmtree(path)
+
 
 """
     Get a response from a specified openai model.
@@ -67,6 +71,13 @@ def get_openai_response(openai_client, model, prompt, print_usage=False, dev_pro
 
     return response
 
+"""
+    Get the number of input tokens for a given openai prompt, with a given model.
+"""
+def get_openai_token_estimate(prompt, model):
+    encoding = tiktoken.encoding_for_model(model)
+    tokens = encoding.encode(prompt)
+    return len(tokens)
 
 """
     Get a structured response from gpt4o, given a list of messages, and a response format class.

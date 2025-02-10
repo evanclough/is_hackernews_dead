@@ -12,6 +12,7 @@ class PotentialResponseTree:
     def __init__(self, prt_dict, is_root=False):
         self.id = prt_dict["id"]
         self.is_root = is_root
+        self.parent = -1 if self.is_root else prt_dict["parent"]
         self.active = False
 
         self.kids = [PotentialResponseTree(kid_prt_dict) for kid_prt_dict in prt_dict["kids"]]
@@ -44,6 +45,9 @@ class PotentialResponseTree:
 
     def get_id(self):
         return self.id
+
+    def get_parent(self):
+        return self.parent
 
     def get_is_root(self):
         return self.is_root
@@ -127,21 +131,21 @@ class PotentialResponseTree:
         parent.set_kids(new_kids)
 
     """
-        Add a child to this branch, given an existing 
+        Add a child to this branch
     """
     def add_kid(self, child_id):
-        kid = PotentialResponseTree({"id": child_id, "kids": []})
+        kid = PotentialResponseTree({"id": child_id, "parent": self.id, "kids": []})
         new_kids = [*self.get_kids(), kid]
         self.set_kids(new_kids)
 
     """
         Fetch the full contents of this leaf with data from given sources.
     """
-    def fetch_contents(self, sqlite_db=None, chroma_db=None, load_author=False):
+    def fetch_contents(self, sqlite_db=None, chroma_db=None, load_author=False, verbose=False):
         if self.is_root:
-            contents = classes.Post(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False)
+            contents = classes.Post(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False, verbose=verbose)
         else:
-            contents = classes.Comment(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False)
+            contents = classes.Comment(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False, verbose=verbose)
 
         return contents
         
@@ -151,11 +155,11 @@ class PotentialResponseTree:
         generate a full feature set with it is present, and 
         if not, remove it, and all of its descendants.
     """
-    def clean(self, sqlite_db, chroma_db):
+    def clean(self, sqlite_db=None, chroma_db=None, verbose=False):
         try:
-            contents = self.fetch_contents(sqlite_db=sqlite_db, chroma_db=chroma_db)
+            contents = self.fetch_contents(sqlite_db=sqlite_db, chroma_db=chroma_db, verbose=verbose)
             if contents.check(sqlite_db, chroma_db):
-                clean_kids = [kid for kid in self.kids if kid.clean(sqlite_db, chroma_db)]
+                clean_kids = [kid for kid in self.kids if kid.clean(sqlite_db=sqlite_db, chroma_db=chroma_db, verbose=verbose)]
                 self.kids = clean_kids
                 return True
             else:
@@ -170,13 +174,13 @@ class PotentialResponseTree:
         Convert back to the original dict form.
     """
     def convert_to_dict(self):
-        return self.dfs(lambda c: {"id": c["me"].get_id(), "kids": c["kids"]}, reduce_kids_f=lambda acc, c: [*acc, c], reduce_kids_acc=[])
+        return self.dfs(lambda c: {"id": c["me"].get_id(), "kids": c["kids"]} if c["me"].get_is_root() else {"id": c["me"].get_id(), "parent": c["me"].get_parent(), "kids": c["kids"]}, reduce_kids_f=lambda acc, c: [*acc, c], reduce_kids_acc=[])
 
     """
         Iterate through this potential response tree via a DFS.
         Many options provided.
     """
-    def dfs(self, f, sqlite_db=None, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None, depth=0):
+    def dfs(self, f, sqlite_db=None, chroma_db=None, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None, depth=0, verbose=False):
 
         f_inp = {
             "me": self,
@@ -186,14 +190,14 @@ class PotentialResponseTree:
         }
 
         if sqlite_db != None:
-            f_inp["contents"] = self.fetch_contents(sqlite_db=sqlite_db)
+            f_inp["contents"] = self.fetch_contents(sqlite_db=sqlite_db, chroma_db=chroma_db, verbose=verbose)
 
         if filter_f != None:
             filter_res = filter_f(f_inp)
             if filter_res == False:
                 return None
 
-        kid_results = [kid.dfs(f, sqlite_db=sqlite_db, filter_f=filter_f, reduce_kids_f=reduce_kids_f,reduce_kids_acc=reduce_kids_acc, depth=depth+1) for kid in self.kids] 
+        kid_results = [kid.dfs(f, sqlite_db=sqlite_db, chroma_db=chroma_db, filter_f=filter_f, reduce_kids_f=reduce_kids_f,reduce_kids_acc=reduce_kids_acc, depth=depth+1) for kid in self.kids] 
 
         if reduce_kids_f != None:
             reduced = functools.reduce(reduce_kids_f, kid_results, reduce_kids_acc)
@@ -386,8 +390,8 @@ class PotentialResponseForest:
     """
         Clean all roots.
     """
-    def clean(self, sqlite_db, chroma_db):
-        clean_roots = [root for root in self.roots if root.clean(sqlite_db, chroma_db)]
+    def clean(self, sqlite_db=None, chroma_db=None, verbose=False):
+        clean_roots = [root for root in self.roots if root.clean(sqlite_db=sqlite_db, chroma_db=chroma_db, verbose=verbose)]
         self.set_roots(clean_roots)
 
     """

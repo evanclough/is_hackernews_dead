@@ -1,0 +1,46 @@
+[
+    {
+        "username": "test_real_user_1",
+        "about": "test about",
+        "karma": 4,
+        "created": "12354",
+        "user_class": "real",
+        "post_ids": [],
+        "comment_ids": [],
+        "favorite_post_ids": [],
+        "misc_json": []
+    },
+    {
+        "username": "test_real_user_2",
+        "about": "test about",
+        "karma": 4,
+        "created": "12354",
+        "user_class": "real",
+        "post_ids": [],
+        "comment_ids": [],
+        "favorite_post_ids": [],
+        "misc_json": []
+    },
+    {
+        "username": "test_real_user_3",
+        "about": "test about",
+        "karma": 4,
+        "created": "12354",
+        "user_class": "real",
+        "post_ids": [],
+        "comment_ids": [],
+        "favorite_post_ids": [],
+        "misc_json": []
+    },
+    {
+        "username": "test_real_user_4",
+        "about": "test about",
+        "karma": 4,
+        "created": "12354",
+        "user_class": "real",
+        "post_ids": [],
+        "comment_ids": [],
+        "favorite_post_ids": [],
+        "misc_json": []
+    }
+]

@@ -1,0 +1,35 @@
+[
+    {
+        "by": "test_real_user_1",
+        "id": 1,
+        "time": "123456",
+        "text": "i like artificial intelligence!",
+        "title": "ai is cool",
+        "url": "",
+        "url_content": "",
+        "score": 123,
+        "misc_json": []
+    },
+    {
+        "by": "test_real_user_1",
+        "id": 2,
+        "time": "123456",
+        "text": "i don't like the cold",
+        "title": "winter sucks",
+        "url": "",
+        "url_content": "",
+        "score": 123,
+        "misc_json": []
+    },
+    {
+        "by": "test_real_user_1",
+        "id": 3,
+        "time": "123456",
+        "text": "i like trains",
+        "title": "train are cool",
+        "url": "",
+        "url_content": "",
+        "score": 123,
+        "misc_json": []
+    }
+]

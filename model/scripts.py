@@ -8,11 +8,31 @@ import utils
 import sys
 import functools
 
+
 """
     Create a new dataset from scratch.
 """
 def _create_dataset(dataset_name):
     return Dataset(dataset_name)
+
+"""
+    Create a testing dataset from preset data jsons.
+"""
+def _create_basic_test_dataset(dataset_name):
+    dataset = Dataset(dataset_name)
+    _add_users(dataset_name, "test_users.json", "NO")
+    _add_posts(dataset_name, "test_posts.json", "NO")
+    _add_comments(dataset_name, "test_comments.json", "NO")
+
+"""
+    Create a testing dataset from preset data jsons, with supposedly real users..
+"""
+def _create_real_test_dataset(dataset_name):
+    dataset = Dataset(dataset_name)
+    _add_users(dataset_name, "test_real_users.json", "NO")
+    _add_posts(dataset_name, "test_real_posts.json", "NO")
+    _add_comments(dataset_name, "test_real_comments.json", "NO")
+
 
 """
     Make a copy of a given dataset.
@@ -84,7 +104,7 @@ def _add_users(dataset_name, user_json_path, copy):
         _copy_dataset(dataset_name, copy)
         dataset_name = copy
     dataset = Dataset(dataset_name, existing_dataset_name=dataset_name)
-    user_dicts = utils.read_json(user_json_path)
+    user_dicts = utils.read_json("./test_json/" + user_json_path)
     dataset.add_users(user_dicts)
 
 """
@@ -106,7 +126,7 @@ def _add_posts(dataset_name, post_json_path, copy):
         _copy_dataset(dataset_name, copy)
         dataset_name = copy
     dataset = Dataset(dataset_name, existing_dataset_name=dataset_name)
-    post_dicts = utils.read_json(post_json_path)
+    post_dicts = utils.read_json("./test_json/" + post_json_path)
     dataset.add_root_posts(post_dicts)
 
 """
@@ -118,7 +138,7 @@ def _add_comments(dataset_name, comment_json_path, copy):
         _copy_dataset(dataset_name, copy)
         dataset_name = copy
     dataset = Dataset(dataset_name, existing_dataset_name=dataset_name)
-    comment_dicts = utils.read_json(comment_json_path)
+    comment_dicts = utils.read_json("./test_json/" + comment_json_path)
     dataset.add_leaf_comments(comment_dicts)
 
 """
@@ -129,7 +149,72 @@ def _embed_dataset(dataset_name, copy):
     if copy != "NO":
         _copy_dataset(dataset_name, copy)
         dataset_name = copy
-    dataset = Dataset(dataset_name, existing_dataset_name=dataset_name, init_chroma=True)
+    dataset = Dataset(dataset_name, existing_dataset_name=dataset_name)
+    print(dataset.has_chroma)
+
+"""
+    Run feature extraction on a given user.
+"""
+def _featurex_user(dataset_name, username, copy):
+    if copy != "NO":
+        _copy_dataset(dataset_name, copy)
+        dataset_name = copy
+    dataset = Dataset(dataset_name, existing_dataset_name=dataset_name, use_openai_client=True)
+    dataset.featurex_user(username)
+
+"""
+    Run feature extraction on all real users in a given dataset's user pool.
+"""
+def _featurex_user_pool(dataset_name, copy):
+    if copy != "NO":
+        _copy_dataset(dataset_name, copy)
+        dataset_name = copy
+    dataset = Dataset(dataset_name, existing_dataset_name=dataset_name, use_openai_client=True)
+    dataset.featurex_user_pool()
+
+"""
+    Summarize a postin the dataset's url content, given its id.
+"""
+def _summarize_post_url_content(dataset_name, post_id, copy):
+    if copy != "NO":
+        _copy_dataset(dataset_name, copy)
+        dataset_name = copy
+    dataset = Dataset(dataset_name, existing_dataset_name=dataset_name, use_openai_client=True)
+    post_item = dataset.prf.get_item(post_id)
+    post_contents = post_item.fetch_contents(sqlite_db=dataset.sqlite_db)
+    post_dict = post_contents.get_sqlite_att_dict()
+    dataset.summarize_url_content()
+
+"""
+    Summarize the URL content of all posts int he dataset.
+"""
+def _summarize_all_posts(dataset_name):
+    if copy != "NO":
+        _copy_dataset(dataset_name, copy)
+        dataset_name = copy
+    dataset = Dataset(dataset_name, existing_dataset_name=dataset_name, use_openai_client=True)
+    dataset.summarize_all_posts()
+
+def _full_featurex(dataset_name):
+    if copy != "NO":
+        _copy_dataset(dataset_name, copy)
+        dataset_name = copy
+    dataset = Dataset(dataset_name, existing_dataset_name=dataset_name, use_openai_client=True)
+    dataset.full_featurex()
+
+"""
+    Get a cost estimate of full feature extraction on a dataset.
+"""
+def _featurex_cost_estimate(dataset_name):
+    dataset = Dataset(dataset_name, existing_dataset_name=dataset_name, use_openai_client=True)
+    dataset.full_openai_featurex_cost_estimate()
+
+"""
+    Get a cost estimate of generating embeddings for a dataset.
+"""
+def _embeddings_cost_estimate(dataset_name):
+    dataset = Dataset(dataset_name, existing_dataset_name=dataset_name)
+    dataset.ce_embedding_dataset()
 
 """
     Print the full user pool of the dataset.
@@ -167,6 +252,8 @@ def _print_branch(dataset_name, item_id):
 if __name__ == "__main__":
     func_map = {
         "create": _create_dataset,
+        "create_basic_test": _create_basic_test_dataset,
+        "create_real_test": _create_real_test_dataset,
         "copy": _copy_dataset,
         "slice_prt": _slice_prt,
         "slice_prf": _slice_prf,
@@ -175,6 +262,13 @@ if __name__ == "__main__":
         "remove_user": _remove_user,
         "add_comments": _add_comments,
         "embed": _embed_dataset,
+        "featurex_user": _featurex_user,
+        "featurex_user_pool": _featurex_user_pool,
+        "featurex_post": _summarize_post_url_content,
+        "featurex_all_posts": _summarize_all_posts,
+        "featurex_dataset": _full_featurex,
+        "featurex_cost_estimate": _featurex_cost_estimate,
+        "embeddings_cost_estimate": _embeddings_cost_estimate,
         "print_user_pool": _print_user_pool,
         "print_user": _print_user,
         "print_item": _print_item,
