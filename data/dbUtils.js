@@ -25,21 +25,20 @@ async function insertUserProfiles(dbPath, userProfiles){
             userClass TEXT,
             postIDs TEXT,
             commentIDs TEXT,
-            favoritePostIDs TEXT,
-            miscJson TEXT
+            favoritePostIDs TEXT
         );
     `;
 
     await db.run(createUserProfilesTableQuery);
 
     const insertUserQuery = `
-        INSERT OR IGNORE INTO userProfiles (username, about, karma, created, userClass, postIDs, commentIDs, favoritePostIDs, miscJson)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO userProfiles (username, about, karma, created, userClass, postIDs, commentIDs, favoritePostIDs)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     for(let i = 0; i < userProfiles.length; i++){
         try {
-            await db.run(insertUserQuery, [userProfiles[i].username, userProfiles[i].about, userProfiles[i].karma, userProfiles[i].created, "real", JSON.stringify(userProfiles[i].postIDs), JSON.stringify(userProfiles[i].commentIDs), JSON.stringify(userProfiles[i].favoritePostIDs), JSON.stringify({})]);
+            await db.run(insertUserQuery, [userProfiles[i].username, userProfiles[i].about, userProfiles[i].karma, userProfiles[i].created, "real", JSON.stringify(userProfiles[i].postIDs), JSON.stringify(userProfiles[i].commentIDs), JSON.stringify(userProfiles[i].favoritePostIDs)]);
         }catch (err){
             console.log(`Error inserting user profiles ${err}`);
         }
@@ -67,21 +66,20 @@ async function insertPosts(dbPath, posts){
             descendants INTEGER,
             text TEXT,
             url TEXT,
-            urlContent TEXT,
-            miscJson TEXT
+            urlContent TEXT
         );
     `;
 
     await db.run(createPostsTableQuery);
 
     const insertPostsQuery = `
-            INSERT OR IGNORE INTO posts (by, id, score, time, title, descendants, text, url, urlContent, miscJson)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO posts (by, id, score, time, title, descendants, text, url, urlContent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     for(let i = 0; i < posts.length; i++){
         try {
-            await db.run(insertPostsQuery, [posts[i].by, posts[i].id, posts[i].score, posts[i].time, posts[i].title, posts[i].descendants, posts[i].text, posts[i].url, posts[i].urlContent, JSON.stringify({})]);
+            await db.run(insertPostsQuery, [posts[i].by, posts[i].id, posts[i].score, posts[i].time, posts[i].title, posts[i].descendants, posts[i].text, posts[i].url, posts[i].urlContent]);
         }catch (err){
             console.log(posts[i]);
             console.log(`Error inserting posts ${err}`);
@@ -105,21 +103,20 @@ async function insertComments(dbPath, comments) {
             id INTEGER PRIMARY KEY,
             time TEXT,
             text TEXT,
-            parent INTEGER,
-            miscJson TEXT
+            parent INTEGER
         );
     `;
 
     await db.run(createCommentsTableQuery);
 
     const insertCommentsQuery = `
-            INSERT OR IGNORE INTO comments (by, id, time, text, parent, miscJson)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO comments (by, id, time, text, parent)
+            VALUES (?, ?, ?, ?, ?)
     `;
 
     for(let i = 0; i < comments.length; i++){
         try {
-            await db.run(insertCommentsQuery, [comments[i].by, comments[i].id, comments[i].time, comments[i].text, comments[i].parent, JSON.stringify({})]);
+            await db.run(insertCommentsQuery, [comments[i].by, comments[i].id, comments[i].time, comments[i].text, comments[i].parent]);
         }catch (err){
             console.log(`Error inserting comments ${err}`);
         }
