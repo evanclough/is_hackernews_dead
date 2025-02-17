@@ -33,15 +33,20 @@ def _create_real_test_dataset(dataset_name):
     _add_posts(dataset_name, "test_real_posts.json", "NO")
     _add_comments(dataset_name, "test_real_comments.json", "NO")
 
+"""
+    Remove a given dataset.
+"""
+def _remove_dataset(dataset_name):
+    dataset_path = utils.get_dataset_path(dataset_name)
+    utils.remove_directory(dataset_path)
+    print(f"Successfully removed dataset {dataset_name}")
 
 """
     Make a copy of a given dataset.
 """
 def _copy_dataset(source_name, destination_name):
-    utils.load_env()
-    root_dataset_path = utils.fetch_env_var("ROOT_DATASET_PATH")
-    source_path = root_dataset_path + source_name
-    destination_path = root_dataset_path + destination_name
+    source_path = utils.get_dataset_path(source_name)
+    destination_path = utils.get_dataset_path(destination_name)
     utils.copy_directory(source_path, destination_path)
 
     print(f"Successfully copied dataset {source_name} to dataset {destination_name}.")
@@ -249,12 +254,23 @@ def _print_branch(dataset_name, item_id):
     item_str = dataset.branch_str(int(item_id))
     print(item_str)
 
+"""
+    Reset the test dataset to the stored copy.
+"""
+def _reset_test_dataset():
+    test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
+    test_dataset_path = utils.get_dataset_path(test_dataset_name)
+    if utils.check_directory_exists(test_dataset_path):
+        _remove_dataset(test_dataset_name)
+    _copy_dataset(test_dataset_name + "_COPY", test_dataset_name)
+
 if __name__ == "__main__":
     func_map = {
         "create": _create_dataset,
         "create_basic_test": _create_basic_test_dataset,
         "create_real_test": _create_real_test_dataset,
         "copy": _copy_dataset,
+        "remove": _remove_dataset,
         "slice_prt": _slice_prt,
         "slice_prf": _slice_prf,
         "add_users": _add_users,
@@ -272,7 +288,9 @@ if __name__ == "__main__":
         "print_user_pool": _print_user_pool,
         "print_user": _print_user,
         "print_item": _print_item,
-        "print_branch": _print_branch
+        "print_branch": _print_branch,
+        "reset_tests": _reset_test_dataset,
+
     }
 
     func_map[sys.argv[1]](*sys.argv[2:])

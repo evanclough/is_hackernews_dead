@@ -9,13 +9,14 @@ import functools
 import classes
 
 class PotentialResponseTree:
-    def __init__(self, prt_dict, is_root=False):
+    def __init__(self, prt_dict, parent=None):
         self.id = prt_dict["id"]
-        self.is_root = is_root
-        self.parent = -1 if self.is_root else prt_dict["parent"]
+        self.is_root = parent == None
+        self.parent_id = -1 if self.is_root else prt_dict["parent"]
+        self.parent = parent
         self.active = False
 
-        self.kids = [PotentialResponseTree(kid_prt_dict) for kid_prt_dict in prt_dict["kids"]]
+        self.kids = [PotentialResponseTree(kid_prt_dict, parent=self) for kid_prt_dict in prt_dict["kids"]]
 
     def __str__(self):
         num_descendants = len(self.get_flattened_descendants()) - 1
@@ -24,6 +25,7 @@ class PotentialResponseTree:
         PRT {self.id}
             is {'' if self.is_root else 'not'} root
             is {'' if self.active else 'not'} active
+            {'parent: ' + self.parent_id if self.parent != None else ''}
             has {num_descendants} descendants
         """
         return contents
@@ -48,6 +50,9 @@ class PotentialResponseTree:
 
     def get_parent(self):
         return self.parent
+    
+    def get_parent_id(self):
+        return self.parent_id
 
     def get_is_root(self):
         return self.is_root
@@ -86,10 +91,9 @@ class PotentialResponseTree:
     """
     def get_parent_of_item(self, child_id):
         if self.check_contains_item(child_id):
-            f = lambda n: n["me"] if (child_id in [kid.get_id() for kid in n["me"].get_kids()]) else n["kids"]
-            reduce_kids_f = lambda acc, n: n if n != None else acc
-            reduce_kids_acc = None
-            return self.dfs(f, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
+            child = self.get_item(child_id)
+            parent = child.get_parent()
+            return parent
         else:
             return None
     
@@ -126,7 +130,7 @@ class PotentialResponseTree:
     """
     def add_kid_to_descendant(self, child_id, parent_id):
         parent = self.get_item(parent_id)
-        kid = PotentialResponseTree({"id": child_id, "kids": []})
+        kid = PotentialResponseTree({"id": child_id, "parent": parent_id, "kids": []}, parent=parent)
         new_kids = [*parent["self"].kids, kid]
         parent.set_kids(new_kids)
 
@@ -134,7 +138,7 @@ class PotentialResponseTree:
         Add a child to this branch
     """
     def add_kid(self, child_id):
-        kid = PotentialResponseTree({"id": child_id, "parent": self.id, "kids": []})
+        kid = PotentialResponseTree({"id": child_id, "parent": self.id, "kids": []}, parent=self)
         new_kids = [*self.get_kids(), kid]
         self.set_kids(new_kids)
 
@@ -174,7 +178,7 @@ class PotentialResponseTree:
         Convert back to the original dict form.
     """
     def convert_to_dict(self):
-        return self.dfs(lambda c: {"id": c["me"].get_id(), "kids": c["kids"]} if c["me"].get_is_root() else {"id": c["me"].get_id(), "parent": c["me"].get_parent(), "kids": c["kids"]}, reduce_kids_f=lambda acc, c: [*acc, c], reduce_kids_acc=[])
+        return self.dfs(lambda c: {"id": c["me"].get_id(), "kids": c["kids"]} if c["me"].get_is_root() else {"id": c["me"].get_id(), "parent": c["me"].get_parent_id(), "kids": c["kids"]}, reduce_kids_f=lambda acc, c: [*acc, c], reduce_kids_acc=[])
 
     """
         Iterate through this potential response tree via a DFS.
@@ -244,7 +248,7 @@ class PotentialResponseForestError(Exception):
 class PotentialResponseForest:
     def __init__(self, name, prf):
         self.name = name
-        self.roots = [PotentialResponseTree(prt, is_root=True) for prt in prf]
+        self.roots = [PotentialResponseTree(prt) for prt in prf]
     
     def __str__(self):
         contents = "Potential Response Forest:\n"
@@ -355,7 +359,7 @@ class PotentialResponseForest:
         Add a root to the forest, given its ID.
     """
     def add_root(self, root_id):
-        new_root = PotentialResponseTree({"id": root_id, "kids": []}, is_root=True)
+        new_root = PotentialResponseTree({"id": root_id, "kids": []})
         new_roots = [*self.roots, new_root]
         self.set_roots(new_roots)
 

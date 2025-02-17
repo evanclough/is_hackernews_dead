@@ -16,13 +16,13 @@ class InitTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.test_dataset_name = "TEST_DATASET"
+        cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
         print(f"Running tests on dataset {cls.test_dataset_name}...")
 
     """
         Test initialization of an existing dataset without a chroma db.
     """
-    def test_init_no_chroma(self):
+    def test_no_chroma(self):
 
         test_dataset = dataset.Dataset(self.test_dataset_name, existing_dataset_name=self.test_dataset_name, verbose=True)
 
@@ -30,9 +30,9 @@ class InitTests(unittest.TestCase):
 
     """
         Test the initialization of a chroma db and creation of embeddings
-         for an existing dataset without a chroma db.
+        for an existing dataset without a chroma db.
     """
-    def test_init_create_chroma(self):
+    def test_create_chroma(self):
         test_dataset = dataset.Dataset(self.test_dataset_name, existing_dataset_name=self.test_dataset_name, init_chroma=True, verbose=True)
 
         self.assertIsNotNone(test_dataset)
@@ -46,7 +46,7 @@ class CrudTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.test_dataset_name = "TEST_DATASET"
+        cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
         cls.dataset = dataset.Dataset(cls.test_dataset_name, existing_dataset_name=cls.test_dataset_name, verbose=True)
         cls.insertion_num = 55555
         cls.test_username = f"test_username{cls.insertion_num}"
@@ -180,6 +180,13 @@ class CrudTests(unittest.TestCase):
         self.test_user_removal()
         self.test_comment_removal()
         self.test_post_removal()
+    
+    """
+        Run a full test of all CRUD capabilities.
+    """
+    def test_full(self):
+        self.test_insertion()
+        self.test_removal()
 
 if __name__ == '__main__':
     unittest.main()

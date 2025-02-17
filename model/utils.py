@@ -10,11 +10,13 @@ import tiktoken
 
 from dotenv import load_dotenv
 
-def load_env():
-    load_dotenv()
-
 def fetch_env_var(name):
-    return os.getenv(name)
+    load_dotenv()
+    env_var = os.getenv(name)
+    if env_var == None:
+        raise ValueError(f"Error fetching environment variable {name}: it does not exist")
+    else:
+        return env_var
 
 def read_json(json_path):
     with open(json_path, 'r') as file:
@@ -29,21 +31,23 @@ def write_json(json_data, json_path):
 
 def create_directory(path):
     directory = pathlib.Path(path)
-
     directory.mkdir(parents=True, exist_ok=True)
-
     os.makedirs(directory, exist_ok=True)
 
 def check_directory_exists(path):
     directory_path = pathlib.Path(path)
     return directory_path.is_dir()
 
-
 def copy_directory(source, destination):
     shutil.copytree(source, destination)
 
 def remove_directory(path):
     shutil.rmtree(path)
+
+def get_dataset_path(dataset_name):
+    root_dataset_path = fetch_env_var("ROOT_DATASET_PATH")
+    return root_dataset_path + dataset_name
+
 
 
 """

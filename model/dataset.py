@@ -24,10 +24,8 @@ class DatasetError(Exception):
 
 class Dataset:
     def __init__(self, name, existing_dataset_name=None, init_chroma=False, use_openai_client=False, verbose=False):
-        utils.load_env()
 
         self.name = name
-        self.root_dataset_path = utils.fetch_env_var("ROOT_DATASET_PATH")
         self.verbose = verbose
 
         if use_openai_client:
@@ -36,7 +34,6 @@ class Dataset:
             self._init_from_existing(existing_dataset_name, init_chroma=init_chroma)
         else:
             self._init_from_scratch()
-
         
         self._submission_history_max = {
             "posts": 10,
@@ -63,7 +60,7 @@ class Dataset:
         Initialize from an existing dataset in the format produced in the data module.
     """
     def _init_from_existing(self, existing_dataset_name, init_chroma=False):
-        self.dataset_path = self.root_dataset_path + existing_dataset_name + "/"
+        self.dataset_path = utils.get_dataset_path(existing_dataset_name) + "/"
         self._print(f"Initializing dataset {self.name} from existing dataset at {self.dataset_path}...")
 
         self.sqlite_db_path = self.dataset_path + "data.db"
@@ -141,7 +138,7 @@ class Dataset:
         Initialize a new dataset from scratch, with the given name.
     """
     def _init_from_scratch(self):
-        self.dataset_path = self.root_dataset_path + self.name + "/"
+        self.dataset_path = utils.get_dataset_path(self.name) + "/"
 
         if utils.check_directory_exists(self.dataset_path):
             raise DatasetError(f"Error: Attempted to create dataset from scratch, at existing directory path {self.dataset_path}.")
