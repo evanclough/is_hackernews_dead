@@ -38,6 +38,10 @@ def check_directory_exists(path):
     directory_path = pathlib.Path(path)
     return directory_path.is_dir()
 
+def check_file_exists(path):
+    file_path = pathlib.Path(path)
+    return file_path.is_file()
+
 def copy_directory(source, destination):
     shutil.copytree(source, destination)
 

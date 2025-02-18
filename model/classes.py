@@ -1,5 +1,5 @@
 """
-    The classes used to represent the three datatypes,
+    The classes used to represent the three item types,
     user profile, post, and comment.
 """
 
@@ -76,7 +76,7 @@ class UserProfile:
     def _load_from_sqlite(self, sqlite_db):
         
         self._print(f"Loading sqlite attributes for user {self.username}...")
-        sqlite_row = sqlite_db.get_user_profile_row(self.username)
+        sqlite_row = sqlite_db.get_item_row_by_pk("userProfiles", self.username)
 
         self.username =  sqlite_row[0]
         self.about =  sqlite_row[1]
@@ -351,7 +351,7 @@ class Post(Item):
 
         self._print(f"Loading sqlite attributes for post with id {self.id}...")
 
-        sqlite_row = sqlite_db.get_post_row(self.id)
+        sqlite_row = sqlite_db.get_item_row_by_pk("posts", self.id)
 
         self.by = sqlite_row[0]
         self.id = sqlite_row[1]
@@ -462,7 +462,7 @@ class Comment(Item):
     def _load_from_sqlite(self, sqlite_db):
         self._print(f"Loading sqlite attributes for comment with id {self.id}...")
 
-        sqlite_row = sqlite_db.get_comment_row(self.id)
+        sqlite_row = sqlite_db.get_item_row_by_pk("comments", self.id)
 
         self.by = sqlite_row[0]
         self.id = sqlite_row[1]
