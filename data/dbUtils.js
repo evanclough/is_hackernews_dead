@@ -17,22 +17,22 @@ async function insertUserProfiles(dbPath, userProfiles){
     const db = await sqlite.open({ filename: `./${dbPath}.db`, driver: sqlite3.Database });
 
     const createUserProfilesTableQuery = `
-        CREATE TABLE IF NOT EXISTS userProfiles (
+        CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             about TEXT,
             karma INTEGER,
-            created TEXT,
-            userClass TEXT,
-            postIDs TEXT,
-            commentIDs TEXT,
-            favoritePostIDs TEXT
+            created INTEGER,
+            user_class TEXT,
+            post_ids TEXT,
+            comment_ids TEXT,
+            favorite_post_ids TEXT
         );
     `;
 
     await db.run(createUserProfilesTableQuery);
 
     const insertUserQuery = `
-        INSERT OR IGNORE INTO userProfiles (username, about, karma, created, userClass, postIDs, commentIDs, favoritePostIDs)
+        INSERT OR IGNORE INTO users (username, about, karma, created, user_class, post_ids, comment_ids, favorite_post_ids)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
@@ -61,18 +61,18 @@ async function insertPosts(dbPath, posts){
             by TEXT,
             id INTEGER PRIMARY KEY,
             score INTEGER,
-            time TEXT,
+            time INTEGER,
             title TEXT,
             text TEXT,
             url TEXT,
-            urlContent TEXT
+            url_content TEXT
         );
     `;
 
     await db.run(createPostsTableQuery);
 
     const insertPostsQuery = `
-            INSERT OR IGNORE INTO posts (by, id, score, time, title, text, url, urlContent)
+            INSERT OR IGNORE INTO posts (by, id, score, time, title, text, url, url_content)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
@@ -100,7 +100,7 @@ async function insertComments(dbPath, comments) {
         CREATE TABLE IF NOT EXISTS comments (
             by TEXT,
             id INTEGER PRIMARY KEY,
-            time TEXT,
+            time INTEGER,
             text TEXT,
             parent INTEGER
         );

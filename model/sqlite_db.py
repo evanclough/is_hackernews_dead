@@ -38,7 +38,7 @@ class SqliteDB:
     def __init__(self, db_path, features, create=False):
         self.db_path = db_path
         self.item_types = {
-            "userProfiles": {
+            "users": {
                 "primary_key": "username"
             },
             "posts": {
@@ -50,56 +50,56 @@ class SqliteDB:
         }
         self.base_attributes = [
             {
-                "item_type": "userProfiles",
+                "item_type": "users",
                 "name": "username",
                 "sqlite_type": "TEXT",
                 "sqlite_order": 0,
                 "py_type": "str"
             },
             {
-                "item_type": "userProfiles",
+                "item_type": "users",
                 "name": "about",
                 "sqlite_type": "TEXT",
                 "sqlite_order": 1,
                 "py_type": "str"
             },
             {
-                "item_type": "userProfiles",
+                "item_type": "users",
                 "name": "karma",
                 "sqlite_type": "INTEGER",
                 "sqlite_order": 2,
                 "py_type": "int"
             },
             {
-                "item_type": "userProfiles",
+                "item_type": "users",
                 "name": "created",
-                "sqlite_type": "TEXT",
+                "sqlite_type": "INTEGER",
                 "sqlite_order": 3,
                 "py_type": "int"
             },
             {
-                "item_type": "userProfiles",
+                "item_type": "users",
                 "name": "user_class",
                 "sqlite_type": "TEXT",
                 "sqlite_order": 4,
                 "py_type": "str"
             },
             {
-                "item_type": "userProfiles",
+                "item_type": "users",
                 "name": "post_ids",
                 "sqlite_type": "TEXT",
                 "sqlite_order": 5,
                 "py_type": "list(int)"
             },
             {
-                "item_type": "userProfiles",
+                "item_type": "users",
                 "name": "comment_ids",
                 "sqlite_type": "TEXT",
                 "sqlite_order": 6,
                 "py_type": "list(int)"
             },
             {
-                "item_type": "userProfiles",
+                "item_type": "users",
                 "name": "favorite_post_ids",
                 "sqlite_type": "TEXT",
                 "sqlite_order": 7,
@@ -129,7 +129,7 @@ class SqliteDB:
             {
                 "item_type": "posts",
                 "name": "time",
-                "sqlite_type": "TEXT",
+                "sqlite_type": "INTEGER",
                 "sqlite_order": 3,
                 "py_type": "int"
             },
@@ -185,7 +185,7 @@ class SqliteDB:
             {
                 "item_type": "comments",
                 "name": "time",
-                "sqlite_type": "TEXT",
+                "sqlite_type": "INTEGER",
                 "sqlite_order": 3,
                 "py_type": "int"
             },
@@ -251,8 +251,6 @@ class SqliteDB:
         select_query = f"""
             SELECT * FROM {item_type} WHERE {where_str}
         """
-
-        print(select_query)
 
         self.cursor.execute(select_query, tuple(where_dict.values()))
 
@@ -326,50 +324,10 @@ class SqliteDB:
         result = self.select_item_type(item_type, where_dict)
 
         if len(result) == 0:
-            raise UniqueDBItemNotFound(f"Username {username} could not be found in the sqlite database")
+            raise UniqueDBItemNotFound(f"Item of type {item_type} with primary key {primary_key} could not be found in the sqlite database.")
         if len(result) > 1:
-            raise MultipleUniqueItemsFound(f"Multiple users found with username {username}, this should never happen but just in case")
+            raise MultipleUniqueItemsFound(f"Item of type {item_type} with primary key {primary_key} had multiple results found. this should never happen but just in case")
         return result[0]
-
-    """
-        Add a list of post ids to a user's record.
-    """
-    def add_post_ids_to_user(self, username, post_ids):
-        user_profile = classes.UserProfile(username, sqlite_db=self)
-        updated_post_ids = [*user_profile.post_ids, *post_ids]
-        update_dict = {"postIDs": json.dumps(updated_post_ids)}
-
-        self.update_item_type("userProfiles",  username, update_dict)
-
-    """
-        Add a list of comment ids to a user's record.
-    """
-    def add_comment_ids_to_user(self, username, comment_ids):
-        user_profile = classes.UserProfile(username, sqlite_db=self)
-        updated_comment_ids = [*user_profile.comment_ids, *comment_ids]
-        update_dict = {"commentIDs": json.dumps(updated_comment_ids)}
-
-        self.update_item_type("userProfiles", username, update_dict)
-
-    """
-        Remove a list of post ids from a user's record
-    """
-    def remove_post_ids_from_user(self, username, post_ids):
-        user_profile = classes.UserProfile(username, sqlite_db=self)
-        updated_post_ids = [pid for pid in user_profile.post_ids if not (pid in post_ids)]
-        update_dict = {"postIDs": json.dumps(updated_post_ids)}
-
-        self.update_item_type("userProfiles", username, update_dict)
-
-    """
-        Remove a list of comment ids from a user's record
-    """
-    def remove_comment_ids_from_user(self, username, comment_ids):
-        user_profile = classes.UserProfile(username, sqlite_db=self)
-        updated_comment_ids = [cid for cid in user_profile.comment_ids if not (cid in comment_ids)]
-        update_dict = {"commentIDs": json.dumps(updated_comment_ids)}
-
-        self.update_item_type("userProfiles", username, update_dict)
 
     """
         Remove a list of items from a given item type's table, given a list of primary keys

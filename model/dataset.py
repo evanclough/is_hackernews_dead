@@ -14,6 +14,7 @@ import chroma_db
 import user_pool
 import potential_responses
 import feature_extraction
+import classes
 
 """
     An exception class for general dataset errors.
@@ -253,7 +254,7 @@ class Dataset:
             self.user_pool.add_usernames(username_list)
 
             self._print("Putting into sqlite...")
-            self.sqlite_db.insert_item_type("userProfiles", user_dict_list) 
+            self.sqlite_db.insert_item_type("users", user_dict_list) 
 
             if self.has_chroma:
                 self._print("Generating embeddings...")
@@ -299,7 +300,7 @@ class Dataset:
                     self.remove_comments(comment_ids)
 
             self._print("Removing from sqlite...")
-            self.sqlite_db.delete_items_by_pk("userProfiles", username_list)
+            self.sqlite_db.delete_items_by_pk("users", username_list)
 
             if self.has_chroma:
                 self._print("Removing embeddings...")
@@ -327,7 +328,7 @@ class Dataset:
     """
         Add a set of new root posts to the dataset, given a list of attribute dicts
     """
-    def add_root_posts(self, post_dict_list):
+    def add_root_posts(self, post_dict_list, update_author_profile=False):
         try:
             self._print("Adding root posts:")
             for post_dict in post_dict_list:
@@ -338,6 +339,24 @@ class Dataset:
 
             self._print("Putting into sqlite...")
             self.sqlite_db.insert_item_type("posts", post_dict_list)
+            
+            if update_author_profile:
+                self._print("Updating authors post histroies in sqlite...")
+
+                author_post_map = {}
+                for post_dict in post_dict_list:
+                    author_username = post_dict["by"]
+                    post_id = post_dict["id"]
+                    if author_username in author_post_map:
+                        author_post_map[author_username].append(post_id)
+                    else:
+                        author_post_map[author_username] = [post_id]
+
+                for username, user_new_post_ids in author_post_map.items():
+                    user_profile = classes.UserProfile(username, sqlite_db=self.sqlite_db)
+                    updated_post_ids = [*user_profile.post_ids, *user_new_post_ids]
+                    update_dict = {"post_ids": json.dumps(updated_post_ids)}
+                    self.sqlite_db.update_item_type("users", username, update_dict)
 
             if self.has_chroma:
                 self._print("Generating embeddings...")
@@ -376,6 +395,8 @@ class Dataset:
             self.remove_comments(all_kid_ids, update_author_profile=update_author_profile)
             
             if update_author_profile:
+                self._print("Updating authors post histories in sqlite...")
+
                 author_post_map = {}
                 for post_id in post_ids:
                     post = self.prf.get_item(post_id)
@@ -386,8 +407,11 @@ class Dataset:
                     else:
                         author_post_map[author_username] = [post_id]
 
-                for username, user_post_ids in author_post_map.items():
-                    self.sqlite_db.remove_post_ids_from_user(username, user_post_ids)
+                for username, user_post_ids_to_remove in author_post_map.items():
+                    user_profile = classes.UserProfile(username, sqlite_db=self.sqlite_db)
+                    updated_post_ids = [pid for pid in user_profile.post_ids if not (pid in user_post_ids_to_remove)]
+                    update_dict = {"post_ids": json.dumps(updated_post_ids)}
+                    self.sqlite_db.update_item_type("users", username, update_dict)
 
             self._print("Removing from sqlite...")
             self.sqlite_db.delete_items_by_pk("posts", post_ids)
@@ -415,7 +439,7 @@ class Dataset:
         Add a list of leaf comments to the dataset, 
         given a list of dicts including their attributes.
     """
-    def add_leaf_comments(self, leaf_dict_list):
+    def add_leaf_comments(self, leaf_dict_list, update_author_profile=False):
         try:
             self._print("Adding leaf comments:")
             for leaf_dict in leaf_dict_list:
@@ -429,6 +453,24 @@ class Dataset:
 
             self._print("Putting into sqlite...")
             self.sqlite_db.insert_item_type("comments", leaf_dict_list)
+
+            if update_author_profile:
+                self._print("Updating authors comment histories in sqlite...")
+
+                author_comment_map = {}
+                for leaf_dict in leaf_dict_list:
+                    author_username = leaf_dict["by"]
+                    leaf_id = leaf_dict["id"]
+                    if author_username in author_comment_map:
+                        author_comment_map[author_username].append(leaf_id)
+                    else:
+                        author_comment_map[author_username] = [leaf_id]
+
+                for username, user_new_comment_ids in author_comment_map.items():
+                    user_profile = classes.UserProfile(username, sqlite_db=self.sqlite_db)
+                    updated_comment_ids = [*user_profile.comment_ids, *user_new_comment_ids]
+                    update_dict = {"comment_ids": json.dumps(updated_comment_ids)}
+                    self.sqlite_db.update_item_type("users", username, update_dict)
 
             if self.has_chroma:
                 self._print("Generating embeddings...")
@@ -472,9 +514,13 @@ class Dataset:
             self._print("Full list of comments to be removed, including descendants:")
             for comment in all_comments_to_remove:
                 self._print(comment.get_id())
-            
+
+            all_comment_ids_to_remove = [comment.get_id() for comment in all_comments_to_remove]
+            unique_comment_ids_to_remove = list(set(all_comment_ids_to_remove))
 
             if update_author_profile:
+                self._print("Updating author comment histories in sqlite...")
+
                 comment_contents = [comment.fetch_contents(sqlite_db=self.sqlite_db) for comment in all_comments_to_remove]
 
                 author_comment_map = {}
@@ -486,12 +532,12 @@ class Dataset:
                     else:
                         author_comment_map[author_username] = [comment.id]
                 
-                for username, user_comment_ids in author_comment_map.items():
-                    unique_comment_ids = list(set(user_comment_ids))
-                    self.sqlite_db.remove_comment_ids_from_user(username, unique_comment_ids)
-
-            all_comment_ids_to_remove = [comment.get_id() for comment in all_comments_to_remove]
-            unique_comment_ids_to_remove = list(set(all_comment_ids_to_remove))
+                for username, user_comment_ids_to_remove in author_comment_map.items():
+                    unique_comment_ids = list(set(user_comment_ids_to_remove))
+                    user_profile = classes.UserProfile(username, sqlite_db=self.sqlite_db)
+                    updated_comment_ids = [cid for cid in user_profile.comment_ids if not (cid in unique_comment_ids)]
+                    update_dict = {"comment_ids": json.dumps(updated_comment_ids)}
+                    self.sqlite_db.update_item_type("users", username, update_dict)
 
             self._print("Removing from sqlite...")
             self.sqlite_db.delete_items_by_pk("comments", unique_comment_ids_to_remove)
@@ -614,7 +660,7 @@ class Dataset:
         
         self._print("Putting into sqlite...")
         update_dict = {"textSamples": json.dumps(text_samples)}
-        self.sqlite_db.update_item_type("userProfiles", username, update_dict)
+        self.sqlite_db.update_item_type("users", username, update_dict)
 
         self._print("Updating embeddings...")
         update_dict = {"text_samples": text_samples, "username": username}

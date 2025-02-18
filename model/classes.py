@@ -60,7 +60,7 @@ class UserProfile:
         self.username = sqlite_atts_dict["username"]
         self.about = sqlite_atts_dict["about"]
         self.karma = sqlite_atts_dict["karma"]
-        self.created = int(sqlite_atts_dict["created"])
+        self.created = sqlite_atts_dict["created"]
         self.user_class = sqlite_atts_dict["user_class"]
         self.post_ids = sqlite_atts_dict["post_ids"]
         self.comment_ids = sqlite_atts_dict["comment_ids"]
@@ -76,12 +76,12 @@ class UserProfile:
     def _load_from_sqlite(self, sqlite_db):
         
         self._print(f"Loading sqlite attributes for user {self.username}...")
-        sqlite_row = sqlite_db.get_item_row_by_pk("userProfiles", self.username)
+        sqlite_row = sqlite_db.get_item_row_by_pk("users", self.username)
 
         self.username =  sqlite_row[0]
         self.about =  sqlite_row[1]
         self.karma = sqlite_row[2]
-        self.created = int(sqlite_row[3])
+        self.created = sqlite_row[3]
         self.user_class = sqlite_row[4]
         self.post_ids = json.loads(sqlite_row[5])
         self.comment_ids = json.loads(sqlite_row[6])
@@ -234,7 +234,7 @@ class UserProfile:
         
         for favorite_post in self.favorite_posts:
             if not favorite_post.check(sqlite_db, chroma_db):
-                self._print(f"User {self.uesrname} fails check, as post with id {post.id} in their favorites fails check.")
+                self._print(f"User {self.username} fails check, as post with id {post.id} in their favorites fails check.")
                 return False
         
         self._print(f"User {self.username} passes check.")
@@ -335,7 +335,7 @@ class Post(Item):
         self.by = sqlite_atts_dict["by"]
         self.id = sqlite_atts_dict["id"]
         self.score = sqlite_atts_dict["score"]
-        self.time = int(sqlite_atts_dict["time"])
+        self.time = sqlite_atts_dict["time"]
         self.title = sqlite_atts_dict["title"]
         self.text = sqlite_atts_dict["text"]
         self.url = sqlite_atts_dict["url"]
@@ -355,8 +355,8 @@ class Post(Item):
 
         self.by = sqlite_row[0]
         self.id = sqlite_row[1]
-        self.score = int(sqlite_row[2])
-        self.time = int(sqlite_row[3])
+        self.score = sqlite_row[2]
+        self.time = sqlite_row[3]
         self.title = sqlite_row[4]
         self.text = sqlite_row[5]
         self.url = sqlite_row[6]
@@ -448,7 +448,7 @@ class Comment(Item):
 
         self.by = sqlite_atts_dict["by"]
         self.id = sqlite_atts_dict["id"]
-        self.time = int(sqlite_atts_dict["time"])
+        self.time = sqlite_atts_dict["time"]
         self.text = sqlite_atts_dict["text"]
         self.parent = sqlite_atts_dict["parent"]
 
@@ -466,7 +466,7 @@ class Comment(Item):
 
         self.by = sqlite_row[0]
         self.id = sqlite_row[1]
-        self.time = int(sqlite_row[2])
+        self.time = sqlite_row[2]
         self.text = sqlite_row[3]
         self.parent = sqlite_row[4]
 

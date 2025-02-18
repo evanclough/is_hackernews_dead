@@ -68,7 +68,7 @@ class CrudTests(unittest.TestCase):
             "username": self.test_username,
             "about": "test about",
             "karma": 4,
-            "created": "12354",
+            "created": int(time.time()),
             "user_class": "test",
             "post_ids": [],
             "comment_ids": [],
@@ -85,7 +85,7 @@ class CrudTests(unittest.TestCase):
         post_dict = {
             "by": self.test_username,
             "id": self.insertion_num,
-            "time": str(int(time.time())),
+            "time": int(time.time()),
             "text": "test post text",
             "title": "test post title",
             "url": "test url",
@@ -93,7 +93,7 @@ class CrudTests(unittest.TestCase):
             "score": 123
         }
 
-        self.assertTrue(self.dataset.add_root_posts([post_dict]))
+        self.assertTrue(self.dataset.add_root_posts([post_dict], update_author_profile=True))
     
     """
         Test inserting a comment to a root post.
@@ -103,12 +103,12 @@ class CrudTests(unittest.TestCase):
         comment_dict = {
             "by": self.test_username,
             "id": self.insertion_num + 1,
-            "time": str(int(time.time())),
+            "time": int(time.time()),
             "text": "test text",
             "parent": self.insertion_num
         }
 
-        self.assertTrue(self.dataset.add_leaf_comments([comment_dict]))
+        self.assertTrue(self.dataset.add_leaf_comments([comment_dict], update_author_profile=True))
         
     """
         Test inserting a comment under an existing comment.
@@ -117,12 +117,12 @@ class CrudTests(unittest.TestCase):
         comment_dict = {
             "by": self.test_username,
             "id": self.insertion_num + 2,
-            "time": str(int(time.time())),
+            "time": int(time.time()),
             "text": "test text",
             "parent": self.insertion_num + 1
         }
 
-        self.assertTrue(self.dataset.add_leaf_comments([comment_dict]))
+        self.assertTrue(self.dataset.add_leaf_comments([comment_dict], update_author_profile=True))
 
     """
         Test removing a user from the dataset.
@@ -177,9 +177,9 @@ class CrudTests(unittest.TestCase):
         Run the standard removal tests in the best order.
     """
     def test_removal(self):
-        self.test_user_removal()
-        self.test_comment_removal()
-        self.test_post_removal()
+        self.test_full_comment_removal()
+        self.test_full_post_removal()
+        self.test_full_user_removal()
     
     """
         Run a full test of all CRUD capabilities.
