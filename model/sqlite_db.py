@@ -35,168 +35,16 @@ class InsertionError(Exception):
     A class to hold all methods used to access the database.
 """
 class SqliteDB:
-    def __init__(self, db_path, features, create=False):
+    def __init__(self, db_path, base_attributes, features, create=False):
         self.db_path = db_path
-        self.item_types = {
-            "users": {
-                "primary_key": "username"
-            },
-            "posts": {
-                "primary_key": "id"
-            },
-            "comments": {
-                "primary_key": "id"
-            }
-        }
-        self.base_attributes = [
-            {
-                "item_type": "users",
-                "name": "username",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 0,
-                "py_type": "str"
-            },
-            {
-                "item_type": "users",
-                "name": "about",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 1,
-                "py_type": "str"
-            },
-            {
-                "item_type": "users",
-                "name": "karma",
-                "sqlite_type": "INTEGER",
-                "sqlite_order": 2,
-                "py_type": "int"
-            },
-            {
-                "item_type": "users",
-                "name": "created",
-                "sqlite_type": "INTEGER",
-                "sqlite_order": 3,
-                "py_type": "int"
-            },
-            {
-                "item_type": "users",
-                "name": "user_class",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 4,
-                "py_type": "str"
-            },
-            {
-                "item_type": "users",
-                "name": "post_ids",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 5,
-                "py_type": "list(int)"
-            },
-            {
-                "item_type": "users",
-                "name": "comment_ids",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 6,
-                "py_type": "list(int)"
-            },
-            {
-                "item_type": "users",
-                "name": "favorite_post_ids",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 7,
-                "py_type": "list(int)"
-            },
-            {
-                "item_type": "posts",
-                "name": "by",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 0,
-                "py_type": "str"
-            },
-            {
-                "item_type": "posts",
-                "name": "id",
-                "sqlite_type": "INTEGER",
-                "sqlite_order": 1,
-                "py_type": "int"
-            },
-            {
-                "item_type": "posts",
-                "name": "score",
-                "sqlite_type": "INTEGER",
-                "sqlite_order": 2,
-                "py_type": "int"
-            },
-            {
-                "item_type": "posts",
-                "name": "time",
-                "sqlite_type": "INTEGER",
-                "sqlite_order": 3,
-                "py_type": "int"
-            },
-            {
-                "item_type": "posts",
-                "name": "title",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 4,
-                "py_type": "str"
-            },
-            {
-                "item_type": "posts",
-                "name": "text",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 5,
-                "py_type": "str"
-            },
-            {
-                "item_type": "posts",
-                "name": "url",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 6,
-                "py_type": "str"
-            },
-            {
-                "item_type": "posts",
-                "name": "url_content",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 7,
-                "py_type": "str"
-            },
-            {
-                "item_type": "comments",
-                "name": "by",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 0,
-                "py_type": "str"
-            },
-            {
-                "item_type": "comments",
-                "name": "id",
-                "sqlite_type": "INTEGER",
-                "sqlite_order": 1,
-                "py_type": "int"
-            },
-            {
-                "item_type": "comments",
-                "name": "text",
-                "sqlite_type": "TEXT",
-                "sqlite_order": 2,
-                "py_type": "str"
-            },
-            {
-                "item_type": "comments",
-                "name": "time",
-                "sqlite_type": "INTEGER",
-                "sqlite_order": 3,
-                "py_type": "int"
-            },
-            {
-                "item_type": "comments",
-                "name": "parent",
-                "sqlite_type": "INTEGER",
-                "sqlite_order": 4,
-                "py_type": "int"
-            }   
-        ]
+        self.base_attributes = base_attributes
+
+        self.item_types = {}
+        for base_attribute in base_attributes:
+            if base_attribute["identifier"]:
+                self.item_types[base_attribute["item_type"]] = {
+                    "primary_key": base_attribute["name"]
+                }
 
         self.py_to_sql = {
             "list(int)TEXT": lambda l: json.dumps(l),
@@ -282,10 +130,10 @@ class SqliteDB:
         self.conn.commit()
 
     """
-        Run an update query on an item in a given item type's table, given an update dict, and a primary key
+        Run an update query on an item in a given item type's table, given an update dict, and an identifier
     """
     @_with_db
-    def update_item_type(self, item_type, primary_key, update_dict):
+    def update_item_type(self, item_type, identifier, update_dict):
         update_att_str = ", ".join([f"{att} = ?" for att in list(update_dict.keys())])
 
         update_query = f"""
@@ -294,7 +142,7 @@ class SqliteDB:
             WHERE {self.item_types[item_type]['primary_key']} = ?
         """
 
-        self.cursor.execute(update_query, tuple(update_dict.values()) + (primary_key,))
+        self.cursor.execute(update_query, tuple(update_dict.values()) + (identifier,))
 
         self.conn.commit()
 
@@ -314,27 +162,27 @@ class SqliteDB:
         self.conn.commit()
 
     """
-        Get a row for a given item type with a given primary key.
+        Get a row for a given item type with a given identifier.
     """
-    def get_item_row_by_pk(self, item_type, primary_key):
-        primary_key_name = self.item_types[item_type]['primary_key']
+    def get_item_row_by_identifier(self, item_type, identifier):
+        identifier_name = self.item_types[item_type]['primary_key']
 
-        where_dict = {primary_key_name: primary_key}
+        where_dict = {identifier_name: identifier}
 
         result = self.select_item_type(item_type, where_dict)
 
         if len(result) == 0:
-            raise UniqueDBItemNotFound(f"Item of type {item_type} with primary key {primary_key} could not be found in the sqlite database.")
+            raise UniqueDBItemNotFound(f"Item of type {item_type} with identifier {identifier} could not be found in the sqlite database.")
         if len(result) > 1:
-            raise MultipleUniqueItemsFound(f"Item of type {item_type} with primary key {primary_key} had multiple results found. this should never happen but just in case")
+            raise MultipleUniqueItemsFound(f"Item of type {item_type} with identifier {identifier} had multiple results found. this should never happen but just in case")
         return result[0]
 
     """
-        Remove a list of items from a given item type's table, given a list of primary keys
+        Remove a list of items from a given item type's table, given a list of identifiers
     """
-    def delete_items_by_pk(self, item_type, primary_key_list):
-        primary_key_name = self.item_types[item_type]['primary_key']
+    def delete_items_by_identifier_list(self, item_type, identifier_list):
+        identifier_name = self.item_types[item_type]['primary_key']
 
-        for primary_key in primary_key_list:
-            where_dict = {primary_key_name: primary_key}
+        for identifier in identifier_list:
+            where_dict = {identifier_name: identifier}
             self.delete_item_type(item_type, where_dict)

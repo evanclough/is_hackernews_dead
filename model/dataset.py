@@ -66,15 +66,24 @@ class Dataset:
         self.dataset_path = utils.get_dataset_path(existing_dataset_name) + "/"
         self._print(f"Initializing dataset {self.name} from existing dataset at {self.dataset_path}...")
 
-        self.feature_list_path = self.dataset_path + "features.json"
-        if utils.check_file_exists(self.feature_list_path):
-            self.features = utils.read_json(self.feature_list_path)
+        self.base_attributes_path = self.dataset_path + "base_attributes.json"
+        if utils.check_file_exists(self.base_attributes_path):
+            self.base_attributes = utils.read_json(self.base_attributes_path)
         else:
-            self.features = []
-            utils.write_json(self.features, self.feature_list_path)
+            default_base_attributes_path = utils.fetch_env_var("DEFAULT_BASE_ATTS_PATH")
+            self.base_attributes = utils.read_json(default_base_attributes_path)
+            utils.write_json(self.base_attributes, self.base_attributes_path)
+
+        self.features_path = self.dataset_path + "features.json"
+        if utils.check_file_exists(self.features_path):
+            self.features = utils.read_json(self.features_path)
+        else:
+            default_features_path = utils.fetch_env_var("DEFAULT_FEATURES_PATH")
+            self.features = utils.read_json(default_features_path)
+            utils.write_json(self.features, self.features_path)
 
         self.sqlite_db_path = self.dataset_path + "data.db"
-        self.sqlite_db = sqlite_db.SqliteDB(self.sqlite_db_path, self.features)
+        self.sqlite_db = sqlite_db.SqliteDB(self.sqlite_db_path, self.base_attributes, self.features)
 
         self.chroma_db_path = self.dataset_path + ".chroma"
         self.has_chroma = utils.check_directory_exists(self.chroma_db_path)
@@ -157,14 +166,20 @@ class Dataset:
 
         utils.create_directory(self.dataset_path)
 
-        self.feature_list_path = self.dataset_path + "features.json"
-        self.features = []
-        utils.write_json(self.features, self.feature_list_path)
+        self.base_attributes_path = self.dataset_path + "base_attributes.json"
+        default_base_attributes_path = utils.fetch_env_var("DEFAULT_BASE_ATTS_PATH")
+        self.base_attributes = utils.read_json(default_base_attributes_path)
+        utils.write_json(self.base_attributes, self.base_attributes_path)
+
+        self.features_path = self.dataset_path + "features.json"
+        default_features_path = utils.fetch_env_var("DEFAULT_FEATURES_PATH")
+        self.features = utils.read_json(default_features_path)
+        utils.write_json(self.features, self.features_path)
 
         empty_prf = []
 
         self.sqlite_db_path = self.dataset_path + "data.db"
-        self.sqlite_db = sqlite_db.SqliteDB(self.sqlite_db_path, self.features, create=True)
+        self.sqlite_db = sqlite_db.SqliteDB(self.sqlite_db_path, self.base_attributes, self.features, create=True)
 
         self.chroma_db_path = self.dataset_path + ".chroma"
         self.chroma_db = chroma_db.ChromaDB(self.chroma_db_path, create=True)
@@ -300,7 +315,7 @@ class Dataset:
                     self.remove_comments(comment_ids)
 
             self._print("Removing from sqlite...")
-            self.sqlite_db.delete_items_by_pk("users", username_list)
+            self.sqlite_db.delete_items_by_identifier_list("users", username_list)
 
             if self.has_chroma:
                 self._print("Removing embeddings...")
@@ -414,7 +429,7 @@ class Dataset:
                     self.sqlite_db.update_item_type("users", username, update_dict)
 
             self._print("Removing from sqlite...")
-            self.sqlite_db.delete_items_by_pk("posts", post_ids)
+            self.sqlite_db.delete_items_by_identifier_list("posts", post_ids)
 
             if self.has_chroma:
                 self._print("Removing embeddings...")
@@ -540,7 +555,7 @@ class Dataset:
                     self.sqlite_db.update_item_type("users", username, update_dict)
 
             self._print("Removing from sqlite...")
-            self.sqlite_db.delete_items_by_pk("comments", unique_comment_ids_to_remove)
+            self.sqlite_db.delete_items_by_identifier_list("comments", unique_comment_ids_to_remove)
 
             if self.has_chroma:
                 self._print("Removing embeddings...")
