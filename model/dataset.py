@@ -14,7 +14,7 @@ import chroma_db
 import user_pool
 import potential_responses
 import feature_extraction
-import classes
+import item_types
 
 """
     An exception class for general dataset errors.
@@ -74,6 +74,9 @@ class Dataset:
             self.base_attributes = utils.read_json(default_base_attributes_path)
             utils.write_json(self.base_attributes, self.base_attributes_path)
 
+        item_types.ItemType.set_base_attributes(self.base_attributes)
+
+
         self.features_path = self.dataset_path + "features.json"
         if utils.check_file_exists(self.features_path):
             self.features = utils.read_json(self.features_path)
@@ -81,6 +84,8 @@ class Dataset:
             default_features_path = utils.fetch_env_var("DEFAULT_FEATURES_PATH")
             self.features = utils.read_json(default_features_path)
             utils.write_json(self.features, self.features_path)
+
+        item_types.ItemType.set_features(self.features)
 
         self.sqlite_db_path = self.dataset_path + "data.db"
         self.sqlite_db = sqlite_db.SqliteDB(self.sqlite_db_path, self.base_attributes, self.features)
@@ -285,7 +290,7 @@ class Dataset:
             return True
         except Exception as e:
             print(f"Error adding users to {self}:")
-            print(e)
+            utils.print_error(e)
             return False
 
     """
@@ -307,11 +312,11 @@ class Dataset:
 
             if remove_posts:
                 for user_profile in user_profiles:
-                    post_ids = user_profile.post_ids
+                    post_ids = user_profile.get_att("post_ids")
                     self.remove_root_posts(post_ids)
             if remove_comments:
                 for user_profile in user_profiles:
-                    comment_ids = user_profile.comment_ids
+                    comment_ids = user_profile.get_att("comment_ids")
                     self.remove_comments(comment_ids)
 
             self._print("Removing from sqlite...")
@@ -337,7 +342,7 @@ class Dataset:
             return True
         except Exception as e:
             print("Error removing users from the dataset:")
-            print(e)
+            utils.print_error(e)
             return False
 
     """
@@ -356,7 +361,7 @@ class Dataset:
             self.sqlite_db.insert_item_type("posts", post_dict_list)
             
             if update_author_profile:
-                self._print("Updating authors post histroies in sqlite...")
+                self._print("Updating authors post histories in sqlite...")
 
                 author_post_map = {}
                 for post_dict in post_dict_list:
@@ -368,8 +373,8 @@ class Dataset:
                         author_post_map[author_username] = [post_id]
 
                 for username, user_new_post_ids in author_post_map.items():
-                    user_profile = classes.UserProfile(username, sqlite_db=self.sqlite_db)
-                    updated_post_ids = [*user_profile.post_ids, *user_new_post_ids]
+                    user_profile = item_types.User(username, sqlite_db=self.sqlite_db)
+                    updated_post_ids = [*user_profile.get_att("post_ids"), *user_new_post_ids]
                     update_dict = {"post_ids": json.dumps(updated_post_ids)}
                     self.sqlite_db.update_item_type("users", username, update_dict)
 
@@ -387,7 +392,7 @@ class Dataset:
             return True
         except Exception as e:
             print("Error adding roots to {self}")
-            print(e)
+            utils.print_error(e)
             return False
 
     """
@@ -416,15 +421,15 @@ class Dataset:
                 for post_id in post_ids:
                     post = self.prf.get_item(post_id)
                     post_contents = post.fetch_contents(sqlite_db=self.sqlite_db)
-                    author_username = post_contents.by
+                    author_username = post_contents.get_att("by")
                     if author_username in author_post_map:
                         author_post_map[author_username].append(post_id)
                     else:
                         author_post_map[author_username] = [post_id]
 
                 for username, user_post_ids_to_remove in author_post_map.items():
-                    user_profile = classes.UserProfile(username, sqlite_db=self.sqlite_db)
-                    updated_post_ids = [pid for pid in user_profile.post_ids if not (pid in user_post_ids_to_remove)]
+                    user_profile = item_types.User(username, sqlite_db=self.sqlite_db)
+                    updated_post_ids = [pid for pid in user_profile.get_att("post_ids") if not (pid in user_post_ids_to_remove)]
                     update_dict = {"post_ids": json.dumps(updated_post_ids)}
                     self.sqlite_db.update_item_type("users", username, update_dict)
 
@@ -447,7 +452,7 @@ class Dataset:
             return True
         except Exception as e:
             print("Error removing root posts from the dataset:")
-            print(e)
+            utils.print_error(e)
             return False
 
     """
@@ -482,8 +487,8 @@ class Dataset:
                         author_comment_map[author_username] = [leaf_id]
 
                 for username, user_new_comment_ids in author_comment_map.items():
-                    user_profile = classes.UserProfile(username, sqlite_db=self.sqlite_db)
-                    updated_comment_ids = [*user_profile.comment_ids, *user_new_comment_ids]
+                    user_profile = item_types.User(username, sqlite_db=self.sqlite_db)
+                    updated_comment_ids = [*user_profile.get_att("comment_ids"), *user_new_comment_ids]
                     update_dict = {"comment_ids": json.dumps(updated_comment_ids)}
                     self.sqlite_db.update_item_type("users", username, update_dict)
 
@@ -501,7 +506,7 @@ class Dataset:
             return True
         except Exception as e:
             print("Error adding comments to dataset:")
-            print(e)
+            utils.print_error(e)
             return False
 
     """
@@ -541,16 +546,16 @@ class Dataset:
                 author_comment_map = {}
 
                 for comment in comment_contents:
-                    author_username = comment.by
+                    author_username = comment.get_att("by")
                     if author_username in author_comment_map:
-                        author_comment_map[author_username].append(comment.id)
+                        author_comment_map[author_username].append(comment.get_att("id"))
                     else:
-                        author_comment_map[author_username] = [comment.id]
+                        author_comment_map[author_username] = [comment.get_att("id")]
                 
                 for username, user_comment_ids_to_remove in author_comment_map.items():
                     unique_comment_ids = list(set(user_comment_ids_to_remove))
-                    user_profile = classes.UserProfile(username, sqlite_db=self.sqlite_db)
-                    updated_comment_ids = [cid for cid in user_profile.comment_ids if not (cid in unique_comment_ids)]
+                    user_profile = item_types.User(username, sqlite_db=self.sqlite_db)
+                    updated_comment_ids = [cid for cid in user_profile.get_att("comment_ids") if not (cid in unique_comment_ids)]
                     update_dict = {"comment_ids": json.dumps(updated_comment_ids)}
                     self.sqlite_db.update_item_type("users", username, update_dict)
 
@@ -573,7 +578,7 @@ class Dataset:
             return True
         except Exception as e:
             print("Error removing leaf comments from the dataset:")
-            print(e)
+            utils.print_error(e)
             return False
 
     """

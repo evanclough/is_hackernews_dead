@@ -3,7 +3,7 @@
     its users.
 """
 
-import classes
+import item_types
 
 """
     An exception class for all user pool related errors.
@@ -40,7 +40,7 @@ class UserPool:
     """
     def fetch_user_profile(self, username, sqlite_db=None, chroma_db=None, load_submissions=False, skip_submission_errors=False, verbose=False):
         if self.check_contains_user(username):
-            return classes.UserProfile(username, sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=load_submissions, skip_submission_errors=skip_submission_errors, verbose=verbose)
+            return item_types.User(username, sqlite_db=sqlite_db, chroma_db=chroma_db, load_submissions=load_submissions, skip_submission_errors=skip_submission_errors, verbose=verbose)
         else:
             raise UserPoolError(f"Error: attempt to get user of username {username} not present in the user pool.")
 

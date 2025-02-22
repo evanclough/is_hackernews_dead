@@ -6,7 +6,7 @@
 import json
 import functools
 
-import classes
+import item_types
 
 class PotentialResponseTree:
     def __init__(self, prt_dict, parent=None):
@@ -147,9 +147,9 @@ class PotentialResponseTree:
     """
     def fetch_contents(self, sqlite_db=None, chroma_db=None, load_author=False, verbose=False):
         if self.is_root:
-            contents = classes.Post(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False, verbose=verbose)
+            contents = item_types.Post(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False, verbose=verbose)
         else:
-            contents = classes.Comment(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False, verbose=verbose)
+            contents = item_types.Comment(self.id, sqlite_db=sqlite_db, chroma_db=chroma_db, load_author=False, verbose=verbose)
 
         return contents
         

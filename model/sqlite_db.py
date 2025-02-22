@@ -1,7 +1,6 @@
 import sqlite3
 import json
 import functools
-import classes
 
 import utils
 
@@ -51,8 +50,17 @@ class SqliteDB:
             "list(str)TEXT": lambda l: json.dumps(l),
             "intTEXT": lambda i: str(i),
             "intINTEGER": lambda i: i,
-            "strTEXT": lambda i: i,
-            "strINT": lambda s: int(s)
+            "strTEXT": lambda s: s,
+            "strINTEGER": lambda s: int(s)
+        }
+
+        self.sql_to_py = {
+            "TEXTlist(int)": lambda l: json.loads(l),
+            "TESTlist(str)": lambda l: json.loads(l),
+            "TEXTint": lambda s: int(set_base_attributes),
+            "INTEGERint": lambda i: i,
+            "TEXTstr": lambda s: s,
+            "INTEGERstr": lambda i: str(i)
         }
 
         self.attributes = self.base_attributes + features
@@ -104,7 +112,12 @@ class SqliteDB:
 
         row_tuples = self.cursor.fetchall()
 
-        return row_tuples
+        item_type_atts = [att for att in self.attributes if att['item_type'] == item_type]
+        sorted_item_type_atts = sorted(item_type_atts, key=lambda a: a['sqlite_order'])
+        conversions = [self.sql_to_py[f"{att['sqlite_type']}{att['py_type']}"] for att in sorted_item_type_atts]
+        converted_results = [[conv(att) for att, conv in list(zip(list(row_tuple), conversions))] for row_tuple in row_tuples]
+        
+        return converted_results
     
     """
         Insert some items to a given item type's table, given a list of item dicts
@@ -175,6 +188,8 @@ class SqliteDB:
             raise UniqueDBItemNotFound(f"Item of type {item_type} with identifier {identifier} could not be found in the sqlite database.")
         if len(result) > 1:
             raise MultipleUniqueItemsFound(f"Item of type {item_type} with identifier {identifier} had multiple results found. this should never happen but just in case")
+        
+
         return result[0]
 
     """

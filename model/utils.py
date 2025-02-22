@@ -52,7 +52,16 @@ def get_dataset_path(dataset_name):
     root_dataset_path = fetch_env_var("ROOT_DATASET_PATH")
     return root_dataset_path + dataset_name
 
-
+def print_error(e):
+    print(e)
+    
+    tb = e.__traceback__
+    while tb is not None:
+        filename = tb.tb_frame.f_code.co_filename
+        line = tb.tb_lineno
+        function_name = tb.tb_frame.f_code.co_name
+        print(f"File: {filename}, Line: {line}, Function: {function_name}")
+        tb = tb.tb_next
 
 """
     Get a response from a specified openai model.
