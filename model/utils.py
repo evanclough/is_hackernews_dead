@@ -6,6 +6,8 @@ import json
 import pathlib
 import shutil
 import tiktoken
+import functools
+import chromadb
 
 
 from dotenv import load_dotenv
@@ -49,8 +51,11 @@ def remove_directory(path):
     shutil.rmtree(path)
 
 def get_dataset_path(dataset_name):
-    root_dataset_path = fetch_env_var("ROOT_DATASET_PATH")
-    return root_dataset_path + dataset_name
+    root_dataset_dir = fetch_env_var("ROOT_DATASET_DIR")
+    return root_dataset_dir + dataset_name
+
+def flatten_array(nested_array):
+    return functools.reduce(lambda acc, i: acc + i, nested_array, [])
 
 def print_error(e):
     print(e)
@@ -87,6 +92,34 @@ def get_openai_response(openai_client, model, prompt, print_usage=False, dev_pro
         print(f"Total tokens: {completion.usage.total_tokens}")
 
     return response
+
+"""
+    Get a chroma db embedding function for a designated model name.
+"""
+def get_chroma_embedding_function(model_name):
+    embedding_functions = {
+        "openai_large": chromadb.utils.embedding_functions.OpenAIEmbeddingFunction(
+            api_key=fetch_env_var("OPENAI_API_KEY"),
+            model_name="text-embedding-3-large"
+        ),
+        "openai_small": chromadb.utils.embedding_functions.OpenAIEmbeddingFunction(
+            api_key=fetch_env_var("OPENAI_API_KEY"),
+            model_name="text-embedding-3-small"
+        )
+    }
+
+    return embedding_functions[model_name]
+
+"""
+    Get a tokenizer function for a designated embedding model name.
+"""
+def get_embedding_tokenizer(model_name):
+    embedding_tokenizers = {
+        "openai_large": lambda p: get_openai_token_estimate(p, 'text-embedding-3-large'),
+        "openai_small": lambda p: get_openai_token_estimate(p, 'text-embedding-3-small')
+    }
+
+    return embedding_tokenizers[model_name]
 
 """
     Get the number of input tokens for a given openai prompt, with a given model.
