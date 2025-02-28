@@ -1,0 +1,8 @@
+{
+    "user_pool_path": "user_pool.json",
+    "sf_path": "submission_forest.json",
+    "entities_path": "entities.json",
+    "entities_default": "/home/evan/projects/is_hackernews_dead/model/HN_entities.json",
+    "sqlite_path": "data.db",
+    "chroma_path": ".chroma"
+}

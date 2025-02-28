@@ -8,6 +8,7 @@ import json
 
 import utils
 import dataset
+import entities
 
 """
     Tests for initializing the dataset with various options.
@@ -20,20 +21,21 @@ class InitTests(unittest.TestCase):
         print(f"Running tests on dataset {cls.test_dataset_name}...")
 
     """
-        Test initialization of an existing dataset without a chroma db.
+        Test loading in a dataset.
     """
-    def test_no_chroma(self):
+    def test_load(self):
 
-        test_dataset = dataset.Dataset(self.test_dataset_name, existing_dataset_name=self.test_dataset_name, verbose=True)
+        test_dataset = dataset.Dataset(self.test_dataset_name, entities.HNUser, entities.HNPost, entities.HNComment, verbose=True)
 
         self.assertIsNotNone(test_dataset)
 
     """
-        Test the initialization of a chroma db and creation of embeddings
-        for an existing dataset without a chroma db.
+        Test storing embeddings for a dataset.
     """
-    def test_create_chroma(self):
-        test_dataset = dataset.Dataset(self.test_dataset_name, existing_dataset_name=self.test_dataset_name, init_chroma=True, verbose=True)
+    def test_store_embeddings(self):
+        test_dataset = dataset.Dataset(self.test_dataset_name, entities.HNUser, entities.HNPost, entities.HNComment, verbose=True)
+
+        test_dataset.embed()
 
         self.assertIsNotNone(test_dataset)
 

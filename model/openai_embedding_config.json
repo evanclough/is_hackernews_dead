@@ -1,0 +1,7 @@
+{
+    "model": "openai_large",
+    "max_tokens": 8192,
+    "truncate": true,
+    "truncate_increment": 1000,
+    "input_token_cost": 0.00000013
+}

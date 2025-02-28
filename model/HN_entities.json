@@ -1,0 +1,285 @@
+{
+    "user": {
+        "table_name": "users",
+        "id_att": "username",
+        "attributes": {
+            "base": [
+                {
+                    "name": "username",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 0,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "about",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 1,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": true,
+                    "is_list": false
+                },
+                {
+                    "name": "karma",
+                    "sqlite_type": "INTEGER",
+                    "sqlite_order": 2,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "created",
+                    "sqlite_type": "INTEGER",
+                    "sqlite_order": 3,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "user_class",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 4,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "post_ids",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 5,
+                    "conversions": {
+                        "load": "json_load",
+                        "store": "json_dump"
+                    },
+                    "embed": false,
+                    "is_list": true
+                },
+                {
+                    "name": "comment_ids",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 6,
+                    "conversions": {
+                        "load": "json_load",
+                        "store": "json_dump"
+                    },
+                    "embed": false,
+                    "is_list": true
+                },
+                {
+                    "name": "favorite_post_ids",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 7,
+                    "conversions": {
+                        "load": "json_load",
+                        "store": "json_dump"
+                    },
+                    "embed": false,
+                    "is_list": true
+                }
+            ],
+            "derived": [
+                {
+                    "name": "comments",
+                    "embed": true,
+                    "is_list": true
+                },
+                {
+                    "name": "posts",
+                    "embed": true,
+                    "is_list": true
+                },
+                {
+                    "name": "favorite_posts",
+                    "embed": true,
+                    "is_list": true
+                }
+            ],
+            "generated": []
+        }
+    },
+    "root": {
+        "table_name": "posts",
+        "id_att": "id",
+        "attributes": {
+            "base": [
+                {
+                    "name": "by",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 0,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "id",
+                    "sqlite_type": "INTEGER",
+                    "sqlite_order": 1,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "score",
+                    "sqlite_type": "INTEGER",
+                    "sqlite_order": 2,
+                    "py_type": "int",
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "time",
+                    "sqlite_type": "INTEGER",
+                    "sqlite_order": 3,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "title",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 4,
+                    "py_type": "str",
+                    "embed": true,
+                    "is_list": false
+                },
+                {
+                    "name": "text",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 5,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": true,
+                    "is_list": false
+                },
+                {
+                    "name": "url",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 6,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "url_content",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 7,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": true,
+                    "is_list": false
+                }
+            ],
+            "derived": [
+                {
+                    "name": "author",
+                    "embed": true,
+                    "is_list": false
+                }
+            ],
+            "generated": []
+        }
+    },
+    "branch": {
+        "table_name": "comments",
+        "id_att": "id",
+        "attributes": {
+            "base": [
+                {
+                    "name": "by",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 0,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "id",
+                    "sqlite_type": "INTEGER",
+                    "sqlite_order": 1,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "text",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 2,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": true,
+                    "is_list": false
+                },
+                {
+                    "name": "time",
+                    "sqlite_type": "INTEGER",
+                    "sqlite_order": 3,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                },
+                {
+                    "name": "parent",
+                    "sqlite_type": "INTEGER",
+                    "sqlite_order": 4,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "embed": false,
+                    "is_list": false
+                }
+            ],
+            "derived": [
+                {
+                    "name": "author",
+                    "embed": false,
+                    "is_list": false
+                }
+            ],
+            "generated": []
+        }
+    }
+}

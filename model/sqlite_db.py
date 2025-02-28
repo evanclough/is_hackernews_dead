@@ -34,36 +34,16 @@ class InsertionError(Exception):
     A class to hold all methods used to access the database.
 """
 class SqliteDB:
-    def __init__(self, db_path, base_attributes, features, create=False):
-        self.db_path = db_path
-        self.base_attributes = base_attributes
+    def __init__(self, path, entities, create=False):
+        self.path = path
+        self.entities = entities
 
-        self.item_types = {}
-        for base_attribute in base_attributes:
-            if base_attribute["identifier"]:
-                self.item_types[base_attribute["item_type"]] = {
-                    "primary_key": base_attribute["name"]
-                }
-
-        self.py_to_sql = {
-            "list(int)TEXT": lambda l: json.dumps(l),
-            "list(str)TEXT": lambda l: json.dumps(l),
-            "intTEXT": lambda i: str(i),
-            "intINTEGER": lambda i: i,
-            "strTEXT": lambda s: s,
-            "strINTEGER": lambda s: int(s)
+        self.conversions = {
+            "json_load": json.loads,
+            "json_dump": json.dumps
         }
 
-        self.sql_to_py = {
-            "TEXTlist(int)": lambda l: json.loads(l),
-            "TESTlist(str)": lambda l: json.loads(l),
-            "TEXTint": lambda s: int(set_base_attributes),
-            "INTEGERint": lambda i: i,
-            "TEXTstr": lambda s: s,
-            "INTEGERstr": lambda i: str(i)
-        }
-
-        self.attributes = self.base_attributes + features
+        self.get_conversion = lambda a: self.conversions[a] if a in self.conversions else (lambda b: b)
 
         if create:
             self._create()
@@ -72,102 +52,111 @@ class SqliteDB:
     def _with_db(func):
         @functools.wraps(func)
         def wrapper(self, *args, **kwargs):
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.path) as conn:
                 self.conn = conn
                 self.cursor = conn.cursor()
                 return func(self, *args, **kwargs)
         return wrapper
 
+    """
+        Get all attributes for a given entity that are stored in sqlite, in given order.
+    """
+    def get_atts(self, entity_type):
+        atts = self.entities[entity_type]['attributes']["base"] + self.entities[entity_type]['attributes']["generated"]
+        sorted_atts = sorted(atts, key=lambda a: a['sqlite_order'])
+        return sorted_atts
 
     """
         Create the sqlite database and the needed tables at the specified path.
     """
     @_with_db
     def _create(self):
-        for item_type_name, item_type_dict in self.item_types.items():
-            create_table_query = f"CREATE TABLE {item_type_name} (" + "\n"
-            attribute_list = [
-                f"{att['name']} {att['sqlite_type']} {'PRIMARY KEY' if item_type_dict['primary_key'] == att['name'] else ''}"
-                for i, att in enumerate(self.attributes)
-                if att["item_type"] == item_type_name
+        for entity_type, entity_dict in self.entities.items():
+            atts = get_atts(entity_type)
+            create_table_query = f"CREATE TABLE {entity_dict['table_name']} (" + "\n"
+            att_strs = [
+                f"{att['name']} {att['sqlite_type']} {'PRIMARY KEY' if entity_dict['id_att'] == att['name'] else ''}"
+                for att in atts
             ]
-            create_table_query += ', \n'.join(attribute_list)
+            create_table_query += ', \n'.join(att_strs)
             create_table_query += "\n);"
             self.cursor.execute(create_table_query)
         
         self.conn.commit()
 
     """
-        Run a given selection query on a given item types table, given a where dict.
+        Run a given selection query on a given entity's table, given a where dict.
     """
     @_with_db
-    def select_item_type(self, item_type, where_dict):
+    def select(self, entity_type, where_dict):
         where_str = ", ".join([f"{att} = ?" for att in list(where_dict.keys())])
 
         select_query = f"""
-            SELECT * FROM {item_type} WHERE {where_str}
+            SELECT * FROM {self.entities[entity_type]['table_name']} WHERE {where_str}
         """
 
         self.cursor.execute(select_query, tuple(where_dict.values()))
 
         row_tuples = self.cursor.fetchall()
 
-        item_type_atts = [att for att in self.attributes if att['item_type'] == item_type]
-        sorted_item_type_atts = sorted(item_type_atts, key=lambda a: a['sqlite_order'])
-        conversions = [self.sql_to_py[f"{att['sqlite_type']}{att['py_type']}"] for att in sorted_item_type_atts]
-        converted_results = [[conv(att) for att, conv in list(zip(list(row_tuple), conversions))] for row_tuple in row_tuples]
+        atts = self.get_atts(entity_type)
+        zipped_results = [list(zip(atts, list(row_tuple))) for row_tuple in row_tuples]
+        converted_results = [[(att['name'], self.get_conversion(att['conversions']['load'])(val)) for att, val in r] for r in zipped_results]
         
         return converted_results
     
     """
-        Insert some items to a given item type's table, given a list of item dicts
+        Insert some items to a given entity's table, given a list of item dicts
     """
     @_with_db
-    def insert_item_type(self, item_type, item_dict_list, ignore_dups=False):
+    def insert(self, entity_type, item_dict_list, ignore_dups=False):
 
-        item_type_atts = [att for att in self.attributes if att['item_type'] == item_type]
-        for att in item_type_atts:
-            att["conversion"] = self.py_to_sql[f"{att['py_type']}{att['sqlite_type']}"]
-        sorted_item_type_atts = sorted(item_type_atts, key=lambda a: a['sqlite_order'])
-        item_row_tuples = [tuple([item_type_att['conversion'](item_dict[item_type_att['name']]) for item_type_att in sorted_item_type_atts]) for item_dict in item_dict_list]
+        atts = self.get_entity_atts(entity_type)
+
+        converted_item_lists = [
+            [self.get_conversion(att['conversions']['store'])(item_dict[att["name"]]) for att in atts]
+            for item_dict in item_dict_list]
+        
+        tuples_to_insert = [tuple(item_list) for item_list in converted_item_lists]
 
         insertion_query = f"""
             INSERT {'OR IGNORE' if ignore_dups else ''} 
-            INTO {item_type} 
-            ({', '.join([a['name'] for a in item_type_atts])})
-            VALUES ({', '.join(['?' for a in item_type_atts])})
+            INTO {self.entities[entity]["table_name"]} 
+            ({', '.join([att['name'] for att in entity_atts])})
+            VALUES ({', '.join(['?' for att in entity_atts])})
         """
 
-        self.cursor.executemany(insertion_query, item_row_tuples)
+        self.cursor.executemany(insertion_query, tuples_to_insert)
 
         self.conn.commit()
 
     """
-        Run an update query on an item in a given item type's table, given an update dict, and an identifier
+        Run an update query on an item in a given entity's table, given an update dict and a where dict 
     """
     @_with_db
-    def update_item_type(self, item_type, identifier, update_dict):
-        update_att_str = ", ".join([f"{att} = ?" for att in list(update_dict.keys())])
-
+    def update(self, entity_type, where_dict, update_dict):
+        update_str = ", ".join([f"{att} = ?" for att in list(update_dict.keys())])
+        where_str = ", ".join([f"{att} = ?" for att in list(where_dict.keys())])
+        
         update_query = f"""
-            UPDATE {item_type}
-            SET {update_att_str}
-            WHERE {self.item_types[item_type]['primary_key']} = ?
+            UPDATE {self.entities[entity_type]['table_name']}
+            SET {update_str}
+            WHERE {where_str}
         """
 
-        self.cursor.execute(update_query, tuple(update_dict.values()) + (identifier,))
+        self.cursor.execute(update_query, tuple(update_dict.values(), where_dict.values()))
 
         self.conn.commit()
 
     """
-        Run a delete query on a given item type's table
+        Run a delete query on a given entity's table
     """
     @_with_db
-    def delete_item_type(self, item_type, where_dict):
-        delete_att_str = ", ".join([f"{att} = ?" for att in list(where_dict.keys())])
+    def delete(self, entity_type, where_dict):
+        where_str = ", ".join([f"{att} = ?" for att in list(where_dict.keys())])
 
         delete_query = f"""
-            DELETE FROM {item_type} WHERE {delete_att_str}
+            DELETE FROM {self.entities[entity_type]['table_name']} WHERE {where_str}
         """
 
         self.cursor.execute(delete_query, tuple(where_dict.values()))
@@ -175,29 +164,37 @@ class SqliteDB:
         self.conn.commit()
 
     """
-        Get a row for a given item type with a given identifier.
+        Get a row for a given entity with a given id.
     """
-    def get_item_row_by_identifier(self, item_type, identifier):
-        identifier_name = self.item_types[item_type]['primary_key']
+    def get_by_id(self, entity_type, id_val):
+        id_att = self.entities[entity_type]['id_att']
 
-        where_dict = {identifier_name: identifier}
+        where_dict = {id_att: id_val}
 
-        result = self.select_item_type(item_type, where_dict)
+        result = self.select(entity_type, where_dict)
 
         if len(result) == 0:
-            raise UniqueDBItemNotFound(f"Item of type {item_type} with identifier {identifier} could not be found in the sqlite database.")
+            raise UniqueDBItemNotFound(f"Item of type {entity_type} with id {id_val} could not be found in the sqlite database.")
         if len(result) > 1:
-            raise MultipleUniqueItemsFound(f"Item of type {item_type} with identifier {identifier} had multiple results found. this should never happen but just in case")
-        
+            raise MultipleUniqueItemsFound(f"Item of type {entity_type} with id {id_val} had multiple results found. this should never happen but just in case")
 
         return result[0]
 
     """
-        Remove a list of items from a given item type's table, given a list of identifiers
+        Remove a list of entities from a given entity's table, given a list of ids
     """
-    def delete_items_by_identifier_list(self, item_type, identifier_list):
-        identifier_name = self.item_types[item_type]['primary_key']
+    def delete_by_id_list(self, entity_type, id_list):
+        id_att = self.entities[entity_type]['id_att']
 
-        for identifier in identifier_list:
-            where_dict = {identifier_name: identifier}
-            self.delete_item_type(item_type, where_dict)
+        for id_val in id_list:
+            where_dict = {id_att: id_val}
+            self.delete(entity_type, where_dict)
+
+    """
+        Update a list of entities given an update dict and a list of ids
+    """
+    def update_by_id(self, entity_type, id_val, update_dict):
+        id_att = self.entities[entity_type]['id_att']
+
+        where_dict = {id_att: id_val}
+        self.update(entity_type, where_dict, update_dict)
