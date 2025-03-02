@@ -10,10 +10,11 @@ class ItemLoadError(Exception):
 
 class Entity:
 
-    def __init__(self, id_val, base_atts_dict=None, sqlite_db=None, chroma_db=None, load_derived_atts=False, verbose=False):
+    def __init__(self, entity_type, entity_model, id_val, load={}, verbose=False):
+        self.entity_type = entity_type
+        self.entity_model = entity_model
         self.id = id_val
 
-        self._DEBUG_IGNORE_CHECK = utils.fetch_env_var("DEBUG_IGNORE_CHECK") != '0'
         self.has_base_atts = False
         self.has_embeddings = False
         self.has_derived_atts = False
@@ -23,7 +24,7 @@ class Entity:
         self.atts = {}
         self.embeddings = {}
 
-        for att_list in self.info_dict['attributes'].values():
+        for att_list in self.entity_model['attributes'].values():
             for att in att_list:
                 if att['embed']:
                     self.embeddings[att['name']] = None 
@@ -31,17 +32,26 @@ class Entity:
         
         self._print(f"Initialzing {self}...")
 
-        if base_atts_dict != None:
-            self._init_from_base_atts_dict(base_atts_dict)
-        if sqlite_db != None:
-            self._load_from_sqlite(sqlite_db)
-        if load_derived_atts:
-            self.load_derived_atts(sqlite_db=sqlite_db, chroma_db=chroma_db)
-            self.has_loaded_atts = True
-        if chroma_db != None:
-            self._load_from_chroma(chroma_db)
+        if 'base' in load:
+            if 'dict' in load['base']:
+                self._init_from_base_atts_dict(load['base']['dict'])
+            if 'sqlite' in load['base']:
+                self._load_from_sqlite(load['base']['sqlite'])
+
+        if 'derived' in load:
+            chroma = load['derived']['chroma'] if 'chroma' in load['derived'] else None
+            sqlite = load['derived']['sqlite'] if 'sqlite' in load['derived'] else None
+            other = load['derived']['other'] if 'other' in load['derived'] else None
+            self._load_derived_atts_wrapper(sqlite=sqlite, chroma=chroma, **other)
+        
+        if 'embeddings' in load:
+            chroma = load['embeddings']['chroma']
+            self._load_from_chroma(chroma)
 
         self._print(f"Successfully initialized {self}.")
+
+    def get_id(self):
+        return self.id
 
 
     def _init_from_base_atts_dict(self, base_atts_dict):
@@ -57,9 +67,9 @@ class Entity:
         self._print(f"Successfully populated base attributes from given dict for {self}.")
 
 
-    def _load_from_sqlite(self, sqlite_db):
+    def _load_from_sqlite(self, sqlite):
         self._print(f"Loading attributes from sqlite for {self}...")
-        sqlite_result = sqlite_db.get_by_id(self.entity_type, self.id)
+        sqlite_result = sqlite.get_by_id(self.entity_model, self.id)
 
         for att, val in sqlite_result:
             self.atts[att] = val
@@ -68,43 +78,41 @@ class Entity:
 
         self._print(f"Successfully loaded attributes from sqlite for {self}.")
 
-    def _load_derived_atts_wrapper(self, sqlite_db=None, chroma_db=None):
+    def _load_derived_atts_wrapper(self, sqlite=None, chroma=None, **kwargs):
         self._print(f"Loading derived attributes for {self}...")
 
-        self.load_derived_atts(sqlite_db=sqlite_db, chroma_db=chroma_db)
+        self.load_derived_atts(sqlite=sqlite, chroma=chroma, **kwargs)
 
         self.has_derived_atts = True
 
         self._print(f"Successfully loaded derived attributes for {self}.")
 
-    def _load_from_chroma(self, chroma_db):
+    def _load_from_chroma(self, chroma):
         self._print(f"Loading embeddings from chroma for {self}...")
 
-        for att_dict_list in self.info_dict['attributes'].values():
-            for att_dict in att_dict_list:
-                if att_dict['embed']:
-                    if att_dict['name'] in self.custom_embedding_functions:
-                        self.custom_embedding_functions[att_dict['name']]['load'](chroma_db)
+        for att_model_list in self.entity_model['attributes'].values():
+            for att_model in att_model_list:
+                if att_model['embed']:
+                    if att_model['name'] in self.custom_embedding_functions:
+                        self.custom_embedding_functions[att_model['name']]['load'](chroma)
                     else:
-                        embeddings = chroma_db.get_embeddings_by_id_list(self.entity_type, att_dict, [self.id])
-                        if len(embeddings) != 1:
-                            raise ItemLoadError("TODO")
-                        else:
-                            self.embeddings[att_dict['name']] = embeddings[0]
+                        embeddings = chroma.retrieve(self.entity_model, att_model, [self.id])
+                        self.embeddings[att_model['name']] = embeddings
 
         self.has_embeddings = True
 
         self._print(f"Successfully loaded embeddings from chroma for {self}.")
 
-    def store_embeddings(self, chroma_db):
+    def generate_embeddings(self, chroma):
         self._print(f"Generating embeddings and storing in chroma for {self}...")
-        for att_dict_list in self.info_dict['attributes'].values():
-            for att_dict in att_dict_list:
-                if att_dict['embed']:
-                    if att_dict['name'] in self.custom_embedding_storers:
-                        self.custom_embedding_storers[att_dict['name']]['store'](chroma_db)
+
+        for att_model_list in self.entity_model['attributes'].values():
+            for att_model in att_model_list:
+                if att_model['embed']:
+                    if att_model['name'] in self.custom_embedding_functions:
+                        self.custom_embedding_functions[att_model['name']]['store'](chroma)
                     else:
-                        chroma_db.store_embeddings_for_id_list(self.entity_type, att_dict, [self.id], [self.atts[att_dict['name']]])
+                        chroma.generate(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
 
 
     def set_verbose(self, verbose):
@@ -160,226 +168,59 @@ class Entity:
         return self.atts
 
 
-    def check(self, check_base_atts=False, check_embeddings=False, check_derived_atts=False):
-        if self._DEBUG_IGNORE_CHECK: 
-            return True
-            
+    def check(self, checklist={}):
         att_type_list = [
             {
-                "name": "base attributes",
-                "check_or_not": check_base_atts,
+                "name": "base",
                 "has_or_not": self.has_base_atts,
                 "check_f": self.check_base_atts
             },
             {
                 "name": "embeddings",
-                "check_or_not": check_embeddings,
                 "has_or_not": self.has_embeddings,
                 "check_f": self.check_embeddings
             },
             {
                 "name": "derived",
-                "check_or_not": check_derived_atts,
                 "has_or_not": self.has_derived_atts,
                 "check_f": self.check_derived_atts
             }
         ]
 
-        sources_str = ", ".join([att_type["name"] for att_type in att_type_list if att_type["check_or_not"]])
-        self._print(f"Checking {sources_str} of {self}...")
+        self._print(f"Checking {self}...")
 
         for att_type in att_type_list:
-            if not att_type["has_or_not"]:
-                self._print(f"{self} fails check, as it does not have {att_type['name']} loaded.")
-                return False
-            check_result = att_type['check_f']()
-            if not check_result['success']:
-                self._print(f"{self} fails check, as its {att_type['name']} failed check: {check_result['message']}.")
-                return False
+            if att_type['name'] in checklist:
+                self._print(f"Checking {att_type['name'] + (' attributes' if att_type['name'] != 'embeddings' else '')} of {self}...")
+                if not att_type["has_or_not"]:
+                    self._print(f"{self} fails check, as it does not have {att_type['name']} loaded.")
+                    return False
+                check_result = att_type['check_f'](**(checklist[att_type['name']]))
+                if not check_result['success']:
+                    self._print(f"{self} fails check, as its {att_type['name']} failed check: {check_result['message']}.")
+                    return False
         
-        self._print(f"{self} passes check of {sources_str}")
+        self._print(f"{self} passes check.")
         return True
 
 
-"""
-    For user loading errors.
-"""
-class UserLoadError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
 
+class User(Entity):
+    def __init__(self, *args, **kwargs):
 
-class HNUser(Entity):
-    def __init__(self, uid, , skip_submission_errors=False, **kwargs):
-        self.skip_submission_errors = skip_submission_errors
-        self.entity_type = "user"
+        super().__init__("user", *args, **kwargs)
 
-        self.custom_embedding_functions = {
-            "posts": {
-                "load": lambda p: p,
-                "store": lambda c: self.embed_submission_history("posts", c)
-            },
-            "comments": {
-                "load": lambda p: p,
-                "store": lambda c: self.embed_submission_history("comments", c)
-            },
-            "favorite_posts": {
-                "load": lambda p: p,
-                "store": lambda c: self.embed_submission_history("favorite_posts", c)
-            }
-        }
+class Submission(Entity): 
+    def __init__(self, *args, **kwargs):
 
-        super().__init__(uid, **kwargs) 
+        super().__init__(*args, **kwargs)
 
+class Root(Submission): 
+    def __init__(self, *args, **kwargs):
 
-    def _long_str(self):
-        contents = super()._long_str()
+        super().__init__("root", *args, **kwargs)
 
-        contents += "\t" + f"Submissions are {'' if self.has_submissions else 'not'} loaded." + "\n"
+class Branch(Submission):
+    def __init__(self, *args, **kwargs):
 
-        return contents
-
-    def embed_submission_history(self, sub_type, chroma_db):
-        for submission_object in self.atts[sub_type]:
-            submission_object.store_embeddings(chroma_db)
-
-    """
-        Store all of the user's submission items.
-    """
-    def load_derived_atts(self, sqlite_db=None, chroma_db=None):
-        
-        self._print(f"Loading submission history for {self}...")
-
-        self.submissions = {
-            "posts": {
-                "id_list": "post_ids",
-                "init_func": root_cls
-            },
-            "comments": {
-                "id_list": "comment_ids",
-                "init_func": branch_cls
-            },
-            "favorites": {
-                "id_list": "favorite_post_ids",
-                "init_func": root_cls
-            }
-        }
-
-        for sub_type, sub_dict in self.submissions.items():
-            id_list = self.get_att(sub_dict["id_list"])
-            self.atts[sub_type] = []
-            for id_val in id_list:
-                try:
-                    submission = sub_dict["init_func"](id_val, sqlite_db=sqlite_db, chroma_db=chroma_db)
-                    self.atts[sub_type].append(submission)
-                except Exception as e:
-                    self._print(f"Error in retrieving {sub_type} {id_val} in submission history of {self}.")
-                    if self.skip_submission_errors:
-                        self._print("Skipping...")
-                        continue
-                    else:
-                        raise e
-
-        self._print(f"Successfully loaded submission history for {self}.")
-
-    
-    def check_base_atts(self):
-        return {
-            "success": True
-        }
-
-    def check_embeddings(self):
-        return {
-            "success": True
-        }
-
-    def check_derived_atts(self):
-        
-        submission_lists = ["posts", "comments", "favorite_posts"]
-
-        for submission_list in submission_lists:
-            for submission in self.atts[submission_list]:
-                if not (submission.check()):
-                    return {
-                        "success": False,
-                        "message": f"{sub_type} {item} in their submission history fails check."
-                    }
-
-        return {
-            "success": True
-        }
-
-    def get_embedded_cols(self):
-        embedded_att_dict = {}
-        for att_list in self.info_dict['attributes'].values():
-            for att in att_list:
-                if att['embed']:
-                    embedded_att_dict[att['name']] = self.atts[att['name']]
-        return embedded_att_dict
-
-class HNSubmission(Entity):
-    def __init__(self, sub_id, load_author_sub_history=False, **kwargs):
-        self.load_author_sub_history = load_author_sub_history
-
-        self.custom_embedding_functions = {
-            "author": {
-                "load": lambda p: p,
-                "store": self.embed_author
-            }
-        }
-
-        super().__init__(sub_id, **kwargs)
-
-    def embed_author(self, chroma_db):
-        self.atts['author'].store_embeddings(chroma_db)
-
-    def _long_str(self):
-        contents = super()._long_str()
-
-        contents += "\t" + f"Author is {'' if self.has_author else 'not'} loaded." + "\n"
-
-        return contents
-
-    def load_derived_atts(self, sqlite_db=None, chroma_db=None):
-        self._print(f"Loading author of {self}...")
-
-        if not self.has_base_atts:
-            raise ItemLoadError(f"Error: attempted to load author of {self} that does not have attributes loaded.")
-        
-        self.atts['author'] = HNUser(self.get_att("by"), sqlite_db=sqlite_db, chroma_db=chroma_db, load_derived_atts=self.load_author_sub_history)
-        
-        self._print(f"Successfully loaded author of {self}.")
-
-    def check_base_atts(self):
-        return {
-            "success": True
-        }
-
-    def check_embeddings(self):
-        return {
-            "success": True
-        }
-
-    def check_derived_atts(self):
-
-        if not self.atts['author'].check():
-            return {
-                "success": False,
-                "message": f"Author fails check."
-            }
-    
-        return {
-            "success": True
-        }
-
-class HNPost(HNSubmission):
-    def __init__(self, post_id, **kwargs):
-        self.entity_type = "root"
-
-        super().__init__(post_id, **kwargs)
-
-class HNComment(HNSubmission):
-    def __init__(self, comment_id, **kwargs):
-        self.entity_type = "branch"
-
-        super().__init__(comment_id, **kwargs)
+        super().__init__("branch", *args, **kwargs)

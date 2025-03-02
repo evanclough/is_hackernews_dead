@@ -34,20 +34,15 @@ class InsertionError(Exception):
     A class to hold all methods used to access the database.
 """
 class SqliteDB:
-    def __init__(self, path, entities, create=False):
+    def __init__(self, path):
         self.path = path
-        self.entities = entities
 
         self.conversions = {
             "json_load": json.loads,
             "json_dump": json.dumps
         }
 
-        self.get_conversion = lambda a: self.conversions[a] if a in self.conversions else (lambda b: b)
-
-        if create:
-            self._create()
-
+        self.get_conversion = lambda a: (self.conversions[a] if a in self.conversions else (lambda b: b))
 
     def _with_db(func):
         @functools.wraps(func)
@@ -59,23 +54,15 @@ class SqliteDB:
         return wrapper
 
     """
-        Get all attributes for a given entity that are stored in sqlite, in given order.
-    """
-    def get_atts(self, entity_type):
-        atts = self.entities[entity_type]['attributes']["base"] + self.entities[entity_type]['attributes']["generated"]
-        sorted_atts = sorted(atts, key=lambda a: a['sqlite_order'])
-        return sorted_atts
-
-    """
         Create the sqlite database and the needed tables at the specified path.
     """
     @_with_db
-    def _create(self):
-        for entity_type, entity_dict in self.entities.items():
-            atts = get_atts(entity_type)
-            create_table_query = f"CREATE TABLE {entity_dict['table_name']} (" + "\n"
+    def create(self, entity_models):
+        for entity_model in entity_models.values():
+            atts = sorted(entity_model['attributes']['base'] + entity_model['attributes']['generated'], key=lambda a: a['sqlite_order'])
+            create_table_query = f"CREATE TABLE {entity_model['table_name']} (" + "\n"
             att_strs = [
-                f"{att['name']} {att['sqlite_type']} {'PRIMARY KEY' if entity_dict['id_att'] == att['name'] else ''}"
+                f"{att['name']} {att['sqlite_type']} {'PRIMARY KEY' if entity_model['id_att'] == att['name'] else ''}"
                 for att in atts
             ]
             create_table_query += ', \n'.join(att_strs)
@@ -88,42 +75,42 @@ class SqliteDB:
         Run a given selection query on a given entity's table, given a where dict.
     """
     @_with_db
-    def select(self, entity_type, where_dict):
+    def select(self, entity_model, where_dict):
         where_str = ", ".join([f"{att} = ?" for att in list(where_dict.keys())])
 
         select_query = f"""
-            SELECT * FROM {self.entities[entity_type]['table_name']} WHERE {where_str}
+            SELECT * FROM {entity_model['table_name']} WHERE {where_str}
         """
 
         self.cursor.execute(select_query, tuple(where_dict.values()))
 
         row_tuples = self.cursor.fetchall()
 
-        atts = self.get_atts(entity_type)
+        atts = sorted(entity_model['attributes']['base'] + entity_model['attributes']['generated'], key=lambda a: a['sqlite_order'])
         zipped_results = [list(zip(atts, list(row_tuple))) for row_tuple in row_tuples]
         converted_results = [[(att['name'], self.get_conversion(att['conversions']['load'])(val)) for att, val in r] for r in zipped_results]
         
         return converted_results
     
     """
-        Insert some items to a given entity's table, given a list of item dicts
+        Insert some items to a given entity's table, given a list of attribute dicts
     """
     @_with_db
-    def insert(self, entity_type, item_dict_list, ignore_dups=False):
+    def insert(self, entity_model, att_dict_list, ignore_dups=False):
 
-        atts = self.get_entity_atts(entity_type)
+        atts = sorted(entity_model['attributes']['base'] + entity_model['attributes']['generated'], key=lambda a: a['sqlite_order'])
 
-        converted_item_lists = [
-            [self.get_conversion(att['conversions']['store'])(item_dict[att["name"]]) for att in atts]
-            for item_dict in item_dict_list]
+        converted_att_lists = [
+            [self.get_conversion(att['conversions']['store'])(att_dict[att["name"]]) for att in atts]
+            for att_dict in att_dict_list]
         
-        tuples_to_insert = [tuple(item_list) for item_list in converted_item_lists]
+        tuples_to_insert = [tuple(att_list) for att_list in converted_att_lists]
 
         insertion_query = f"""
             INSERT {'OR IGNORE' if ignore_dups else ''} 
-            INTO {self.entities[entity]["table_name"]} 
-            ({', '.join([att['name'] for att in entity_atts])})
-            VALUES ({', '.join(['?' for att in entity_atts])})
+            INTO {entity_model["table_name"]} 
+            ({', '.join([att['name'] for att in atts])})
+            VALUES ({', '.join(['?' for att in atts])})
         """
 
         self.cursor.executemany(insertion_query, tuples_to_insert)
@@ -134,12 +121,12 @@ class SqliteDB:
         Run an update query on an item in a given entity's table, given an update dict and a where dict 
     """
     @_with_db
-    def update(self, entity_type, where_dict, update_dict):
+    def update(self, entity_model, where_dict, update_dict):
         update_str = ", ".join([f"{att} = ?" for att in list(update_dict.keys())])
         where_str = ", ".join([f"{att} = ?" for att in list(where_dict.keys())])
         
         update_query = f"""
-            UPDATE {self.entities[entity_type]['table_name']}
+            UPDATE {entity_model['table_name']}
             SET {update_str}
             WHERE {where_str}
         """
@@ -152,11 +139,11 @@ class SqliteDB:
         Run a delete query on a given entity's table
     """
     @_with_db
-    def delete(self, entity_type, where_dict):
+    def delete(self, entity_model, where_dict):
         where_str = ", ".join([f"{att} = ?" for att in list(where_dict.keys())])
 
         delete_query = f"""
-            DELETE FROM {self.entities[entity_type]['table_name']} WHERE {where_str}
+            DELETE FROM {entity_model['table_name']} WHERE {where_str}
         """
 
         self.cursor.execute(delete_query, tuple(where_dict.values()))
@@ -166,35 +153,35 @@ class SqliteDB:
     """
         Get a row for a given entity with a given id.
     """
-    def get_by_id(self, entity_type, id_val):
-        id_att = self.entities[entity_type]['id_att']
+    def get_by_id(self, entity_model, id_val):
+        id_att = entity_model['id_att']
 
         where_dict = {id_att: id_val}
 
-        result = self.select(entity_type, where_dict)
+        result = self.select(entity_model, where_dict)
 
         if len(result) == 0:
-            raise UniqueDBItemNotFound(f"Item of type {entity_type} with id {id_val} could not be found in the sqlite database.")
+            raise UniqueDBItemNotFound(f"Entity with id {id_val} could not be found in the sqlite database.")
         if len(result) > 1:
-            raise MultipleUniqueItemsFound(f"Item of type {entity_type} with id {id_val} had multiple results found. this should never happen but just in case")
+            raise MultipleUniqueItemsFound(f"Entity with id {id_val} had multiple results found. this should never happen but just in case")
 
         return result[0]
 
     """
         Remove a list of entities from a given entity's table, given a list of ids
     """
-    def delete_by_id_list(self, entity_type, id_list):
-        id_att = self.entities[entity_type]['id_att']
+    def delete_by_id_list(self, entity_model, id_list):
+        id_att = entity_model['id_att']
 
         for id_val in id_list:
             where_dict = {id_att: id_val}
-            self.delete(entity_type, where_dict)
+            self.delete(entity_model, where_dict)
 
     """
-        Update a list of entities given an update dict and a list of ids
+        Update a list of entities given an update dict and an id
     """
-    def update_by_id(self, entity_type, id_val, update_dict):
-        id_att = self.entities[entity_type]['id_att']
+    def update_by_id(self, entity_model, id_val, update_dict):
+        id_att = entity_model['id_att']
 
         where_dict = {id_att: id_val}
-        self.update(entity_type, where_dict, update_dict)
+        self.update(entity_model, where_dict, update_dict)

@@ -8,7 +8,7 @@ import json
 
 import utils
 import dataset
-import entities
+import HN_entities
 
 """
     Tests for initializing the dataset with various options.
@@ -17,27 +17,161 @@ class InitTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.entity_classes = {
+            "user": HN_entities.HNUser,
+            "root": HN_entities.HNPost,
+            "branch": HN_entities.HNComment
+        }
         cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
+        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes, verbose=True)
+
+
         print(f"Running tests on dataset {cls.test_dataset_name}...")
+
+    def get_cuo(self):
+        def create_user_object(uid):
+            return self.test_dataset.entity_factory("user", uid, load={'base': {'sqlite': self.test_dataset.sqlite}})
+        return create_user_object
+
+    def get_cpo(self):
+        def create_post_object(post_id):
+            return self.test_dataset.entity_factory("root", post_id, load={'base': {'sqlite': self.test_dataset.sqlite}})
+        return create_post_object
+        
+    def get_cco(self):
+        def create_comment_object(comment_id):
+            return self.test_dataset.entity_factory("branch", comment_id, load={'base': {'sqlite': self.test_dataset.sqlite}})
+        return create_comment_object
+
+    
+    def get_HN_derived_sload_dict(self):
+        return 
 
     """
         Test loading in a dataset.
     """
     def test_load(self):
-
-        test_dataset = dataset.Dataset(self.test_dataset_name, entities.HNUser, entities.HNPost, entities.HNComment, verbose=True)
-
-        self.assertIsNotNone(test_dataset)
+        self.assertIsNotNone(self.test_dataset)
 
     """
-        Test storing embeddings for a dataset.
+        Test loading base attributes for the user pool.
+    """
+    def test_base_upl(self):
+        self.test_dataset.user_pool.fetch_all_user_objects(load={'base': {'sqlite': self.test_dataset.sqlite}})
+
+    """
+        Test loading hn derived attributes
+    """
+    def test_HN_derived_upl(self):
+        load_dict = {
+            'base': {
+                'sqlite': self.test_dataset.sqlite
+            },
+            'derived': {
+                'sqlite': self.test_dataset.sqlite,
+                'other': {
+                    'create_post_f': self.get_cpo(),
+                    'create_comment_f': self.get_cco(),
+                    'skip_submission_errors': True
+                }
+            }
+        }
+        self.test_dataset.user_pool.fetch_all_user_objects(load=load_dict)
+
+    """
+        Test loading base attributes for the submission forest.
+    """
+    def test_base_sfl(self):
+        self.test_dataset.sf.dfs_roots(lambda a: a, load={'base': {'sqlite': self.test_dataset.sqlite}})
+
+    """
+        Test loading hn derived attributes
+    """
+    def test_HN_derived_sfl(self):
+        load_dict = {
+            'base': {
+                'sqlite': self.test_dataset.sqlite
+            },
+            'derived': {
+                'sqlite': self.test_dataset.sqlite,
+                'other': {
+                    'create_user_f': self.get_cuo()
+                }
+            }
+        }
+        self.test_dataset.sf.dfs_roots(lambda a: a, load=load_dict)
+
+
+    """
+        Test storing embeddings for a hn dataset.
     """
     def test_store_embeddings(self):
-        test_dataset = dataset.Dataset(self.test_dataset_name, entities.HNUser, entities.HNPost, entities.HNComment, verbose=True)
+        
 
-        test_dataset.embed()
+        user_source_dict = {
+            'create_post_f': self.get_cpo(),
+            'create_comment_f': self.get_cco(),
+            'skip_submission_errors': True
+        }
 
-        self.assertIsNotNone(test_dataset)
+        submission_source_dict= {
+            'create_user_f': self.get_cuo()
+        }
+
+        user_checklist ={
+            "base": {},
+            "derived": {
+                "submission_checklist": {'base': {}}
+            }
+        }
+        submission_checklist ={
+            "base": {},
+            "derived": {
+                "author_checklist": {'base': {}}
+            }
+        }
+
+        self.test_dataset.embed(user_derived_sources=user_source_dict, user_checklist=user_checklist, submission_derived_sources=submission_source_dict, submission_checklist=submission_checklist)
+
+        self.assertIsNotNone(self.test_dataset)
+
+    def test_embeddings_upl(self):
+        load_dict = {
+            'base': {
+                'sqlite': self.test_dataset.sqlite
+            },
+            'derived': {
+                'sqlite': self.test_dataset.sqlite,
+                'other': {
+                    'create_post_f': self.get_cpo(),
+                    'create_comment_f': self.get_cco(),
+                    'skip_submission_errors': True
+                }
+            },
+            "embeddings": {
+                "chroma": self.test_dataset.chroma
+            }
+        }
+        self.test_dataset.user_pool.fetch_all_user_objects(load=load_dict)
+
+    def test_embeddings_sfl(self):
+        load_dict = {
+            'base': {
+                'sqlite': self.test_dataset.sqlite
+            },
+            'derived': {
+                'sqlite': self.test_dataset.sqlite,
+                'other': {
+                    'create_user_f': self.get_cuo()
+                }
+            },
+            "embeddings": {
+                "chroma": self.test_dataset.chroma
+            }
+        }
+
+        self.test_dataset.sf.dfs_roots(lambda a: a, load=load_dict)
+
 
 """
     Test crud operations on a given dataset.

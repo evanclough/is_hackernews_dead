@@ -13,7 +13,7 @@ import sqlite_db
 import chroma_db
 import user_pool
 import submission_forest
-import entities
+import HN_entities
 
 """
     An exception class for general dataset errors.
@@ -23,9 +23,10 @@ class DatasetError(Exception):
         super().__init__(message)
 
 class Dataset:
-    def __init__(self, name, user_cls, root_cls, branch_cls, data_source_file_names=None, embedding_config=None, verbose=False):
+    def __init__(self, name, entity_classes, data_source_file_names=None, embedding_config=None, verbose=False):
 
         self.name = name
+        self.entity_classes = entity_classes
         self.verbose = verbose
         
         self.dataset_path = utils.get_dataset_path(self.name)
@@ -40,40 +41,20 @@ class Dataset:
 
         self.user_pool_path = self.get_data_source_path(self.data_source_file_names["user_pool_path"])
         self.sf_path = self.get_data_source_path(self.data_source_file_names["sf_path"])
-        self.entities_path = self.get_data_source_path(self.data_source_file_names["entities_path"])
+        self.entity_models_path = self.get_data_source_path(self.data_source_file_names["entity_models_path"])
         self.sqlite_path = self.get_data_source_path(self.data_source_file_names["sqlite_path"])
         self.chroma_path = self.get_data_source_path(self.data_source_file_names["chroma_path"])
 
-        if utils.check_file_exists(self.entities_path):
-            self.entities = utils.read_json(self.entities_path)
+        if utils.check_file_exists(self.entity_models_path):
+            self.entity_models = utils.read_json(self.entity_models_path)
         else:
-            self.entities = utils.read_json(utils.fetch_env_var("DEFAULT_ENTITIES"))
+            self.entity_models = utils.read_json(utils.fetch_env_var("DEFAULT_ENTITY_MODELS"))
 
-        setattr(user_cls, "info_dict", self.entities['user'])
-        self.user_cls = user_cls
-
-        setattr(root_cls, "info_dict", self.entities['root'])
-        self.root_cls = root_cls
-
-        setattr(branch_cls, "info_dict", self.entities['branch'])
-        self.branch_cls = branch_cls
 
         has_sqlite = utils.check_file_exists(self.sqlite_path)
-        self.sqlite_db = sqlite_db.SqliteDB(self.sqlite_path, self.entities, create=(not has_sqlite))
-
-        has_sf = utils.check_file_exists(self.sf_path)
-        if has_sf:
-            self.sf = submission_forest.SubmissionForest(self.name, utils.read_json(self.sf_path), self.root_cls, self.branch_cls, verbose=self.verbose)
-        else:
-            self.sf = submission_forest.SubmissionForest(self.name, [], self.root_cls, self.branch_cls, verbose=self.verbose)
-            self.write_current_sf()
-
-        has_user_pool = utils.check_file_exists(self.user_pool_path)
-        if has_user_pool:
-            self.user_pool = user_pool.UserPool(self.name, utils.read_json(self.user_pool_path), self.user_cls, verbose=self.verbose)
-        else:
-            self.user_pool = user_pool.UserPool(self.name, [], self.user_cls, verbose=self.verbose)
-            self.write_current_user_pool()
+        self.sqlite = sqlite_db.SqliteDB(self.sqlite_path)
+        if not has_sqlite:
+            self.sqlite.create(self.entity_models)
 
         if embedding_config == None:
             self.embedding_config = utils.read_json(utils.fetch_env_var("DEFAULT_EMBEDDING_CONFIG"))
@@ -81,34 +62,62 @@ class Dataset:
             self.embedding_config = embedding_config
 
         has_chroma = utils.check_directory_exists(self.chroma_path)
-        self.chroma_db = chroma_db.ChromaDB(self.chroma_path, self.entities, self.embedding_config, create=(not has_chroma))
+        self.chroma = chroma_db.ChromaDB(self.chroma_path, self.embedding_config)
+        if not has_chroma:
+            self.chroma.create(self.entity_models)
 
-    def embed(self):
+        has_sf = utils.check_file_exists(self.sf_path)
+        if has_sf:
+            self.sf = submission_forest.SubmissionForest(self.name, utils.read_json(self.sf_path), self.entity_factory, self.sqlite, self.chroma, verbose=self.verbose)
+        else:
+            self.sf = submission_forest.SubmissionForest(self.name, [], self.entity_factory, verbose=self.verbose)
+            self.write_current_sf()
+
+        has_user_pool = utils.check_file_exists(self.user_pool_path)
+        if has_user_pool:
+            self.user_pool = user_pool.UserPool(self.name, utils.read_json(self.user_pool_path), self.entity_factory, self.sqlite, self.chroma, verbose=self.verbose)
+        else:
+            self.user_pool = user_pool.UserPool(self.name, [], self.entity_factory, verbose=self.verbose)
+            self.write_current_user_pool()
+
+
+    def embed(self, user_derived_sources={}, user_checklist={}, submission_derived_sources={}, submission_checklist={}):
         self._print(f"Generating and storing embeddings for dataset {self}...")
 
         self._print(f"Generating and storing embeddings for user pool...")
 
-        self.user_pool.clean(sqlite_db=self.sqlite_db, check_base_atts=True, check_derived_atts=True)
+        user_load_dict = {
+            'base': {'sqlite': self.sqlite}, 
+            'derived': {'sqlite': self.sqlite, 'other': user_derived_sources}
+        }
 
-        user_objects = self.user_pool.fetch_all_user_objects(sqlite_db=self.sqlite_db, load_derived_atts=True)
-        
+        self.user_pool.clean(load=user_load_dict, checklist=user_checklist)
+
+        user_objects = self.user_pool.fetch_all_user_objects(load=user_load_dict)
+
         for user in user_objects:
-            user.store_embeddings(self.chroma_db)
+            user.generate_embeddings(self.chroma)
 
         self._print(f"Successfully generated and stored embeddings for user pool.")
 
         self._print(f"Generating and storing embeddings for submission forest...")
 
-        self.sf.clean(sqlite_db=self.sqlite_db, check_base_atts=True, check_derived_atts=True)
+        submission_load_dict = {
+            'base': {'sqlite': self.sqlite}, 
+            'derived': {'sqlite': self.sqlite, 'other': submission_derived_sources}
+        }
 
-        self.sf.dfs_roots(lambda s: s['sub_obj'].store_embeddings(self.chroma_db), sqlite_db=self.sqlite_db, load_derived_atts=True)
+        self.sf.clean(load=submission_load_dict, checklist=submission_checklist)
+
+        self.sf.dfs_roots(lambda s: s['sub_obj'].generate_embeddings(self.chroma), load=submission_load_dict)
 
         self._print(f"Successfully generated and stored embeddings for submission forest.")
     
+    def entity_factory(self, entity_type, id_val, load={}):
+        return self.entity_classes[entity_type](self.entity_models[entity_type], id_val, load=load, verbose=self.verbose)
+
     def get_data_source_path(self, filename):
         return self.dataset_path + "/" + filename
-
-    
 
     def _print(self, s):
         if self.verbose:

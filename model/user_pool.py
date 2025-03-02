@@ -15,11 +15,13 @@ class MulitpleUsersFoundError(Exception):
         super().__init__(message)
 
 class UserPool:
-    def __init__(self, name, uid_list, user_cls, verbose=False):
+    def __init__(self, name, uid_list, entity_factory, sqlite, chroma, verbose=False):
         self.name = name
         self.active = False
         self.uids = uid_list
-        self.user_cls = user_cls
+        self.entity_factory = entity_factory
+        self.sqlite = sqlite
+        self.chroma = chroma
         self.verbose = verbose
 
     def _print(self, s):
@@ -46,24 +48,24 @@ class UserPool:
         Get a user object of a given uid from this user pool, with given data sources.
         Raise an error if they're not present.
     """
-    def fetch_user_object(self, uid, sqlite_db=None, chroma_db=None, load_derived_atts=False):
+    def fetch_user_object(self, uid, load={}):
         if self.check_contains_user(uid):
-            return self.user_cls(uid, sqlite_db=sqlite_db, chroma_db=chroma_db, load_derived_atts=load_derived_atts, verbose=self.verbose)
+            return self.entity_factory("user", uid, load=load)
         else:
             raise UserNotFoundError(f"Error: attempt to fetch user object with uid {uid} not present in the user pool.")
 
     """
         Fetch the profile of a list of users, given their uids.
     """
-    def fetch_user_object_list(self, uid_list, sqlite_db=None, chroma_db=None, load_derived_atts=False):
-        users = [self.fetch_user_object(uid, sqlite_db=sqlite_db, chroma_db=chroma_db, load_derived_atts=load_derived_atts) for uid in uid_list]
+    def fetch_user_object_list(self, uid_list, load={}):
+        users = [self.fetch_user_object(uid, load=load) for uid in uid_list]
         return users
 
     """
         Fetch the profiles of all users in the user pool.
     """
-    def fetch_all_user_objects(self, sqlite_db=None, chroma_db=None, load_derived_atts=False):
-        return [self.user_cls(uid, sqlite_db=sqlite_db, chroma_db=chroma_db, load_derived_atts=load_derived_atts) for uid in self.uids]
+    def fetch_all_user_objects(self, load={}):
+        return [self.entity_factory("user", uid, load=load) for uid in self.uids]
 
     """
         Check if this user pool contains a user with a given uid.
@@ -96,8 +98,8 @@ class UserPool:
         Clean this user pool by checking each user (by provided sources) and removing all
         who fail.
     """
-    def clean(self, sqlite_db=None, chroma_db=False, check_base_atts=False, check_embeddings=False, check_derived_atts=False):
-        all_users = self.fetch_all_user_objects(sqlite_db=sqlite_db, chroma_db=chroma_db, load_derived_atts=check_derived_atts)
-        clean_uids = [user.get_uid() for user in all_users if user.check(check_base_atts=check_base_atts, check_embeddings=check_embeddings, check_derived_atts=check_derived_atts)]
+    def clean(self, load={}, checklist={}, derived_kwargs={}):
+        all_users = self.fetch_all_user_objects(load=load)
+        clean_uids = [user.get_id() for user in all_users if user.check(checklist=checklist)]
         self.set_uids(clean_uids)
     

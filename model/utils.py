@@ -126,7 +126,12 @@ def get_embedding_tokenizer(model_name):
 """
 def get_openai_token_estimate(prompt, model):
     encoding = tiktoken.encoding_for_model(model)
-    tokens = encoding.encode(prompt)
+    try:
+        tokens = encoding.encode(prompt)
+    except Exception as e:
+        print(e)
+        print(prompt)
+        exit()
     return len(tokens)
 
 """
