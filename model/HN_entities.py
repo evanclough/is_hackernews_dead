@@ -9,60 +9,42 @@ class HNSubmissionLoadError(Exception):
     def __init__(self, message):
         super().__init__(message)
 
+class HNUserLoader(entities.DerivedLoader):
+    def __init__(self, post_factory, comment_factory, skip_submission_errors=False, **kwargs):
+        super().__init__(**kwargs)
+
+        self.params['post_factory'] = post_factory
+        self.params['comment_factory'] = comment_factory
+        self.params['skip_submission_errors'] = skip_submission_errors
+
 class HNUser(entities.User):
-    def __init__(self, *args,  **kwargs):
-
-        self.custom_embedding_functions = {
-            "posts": {
-                "load": lambda p: p,
-                "store": lambda c: self.embed_submission_history("posts", c)
-            },
-            "comments": {
-                "load": lambda p: p,
-                "store": lambda c: self.embed_submission_history("comments", c)
-            },
-            "favorite_posts": {
-                "load": lambda p: p,
-                "store": lambda c: self.embed_submission_history("favorite_posts", c)
-            }
-        }
-
-        super().__init__(*args, **kwargs) 
-
-
-    def _long_str(self):
-        contents = super()._long_str()
-
-        contents += "\t" + f"Submissions are {'' if self.has_submissions else 'not'} loaded." + "\n"
-
-        return contents
 
     def embed_submission_history(self, sub_type, chroma):
         for submission_object in self.atts[sub_type]:
-            submission_object.generate_embeddings(chroma)
+            submission_object.generate_all_embeddings(chroma)
 
     """
         Store all of the user's submission items.
     """
-    def load_derived_atts(self, sqlite=None, chroma=None, create_post_f=None, create_comment_f=None, skip_submission_errors=False):
+    def load_derived_atts(self, sqlite, post_factory=None, comment_factory=None, skip_submission_errors=False):
         
         self._print(f"Loading submission history for {self}...")
 
-        if create_post_f == None or create_comment_f == None:
+        if post_factory == None or comment_factory == None:
             raise HNUserLoadError(f"Error: attempted to load submission history of {self}, but did not provide post or comment creation methods.")
 
         self.submissions = {
             "posts": {
                 "id_list": "post_ids",
-                "init_func": create_post_f
+                "init_func": post_factory
             },
             "comments": {
                 "id_list": "comment_ids",
-                "init_func": create_comment_f
+                "init_func": comment_factory
             },
             "favorite_posts": {
                 "id_list": "favorite_post_ids",
-                "init_func": create_post_f
+                "init_func": post_factory
             }
         }
 
@@ -75,7 +57,7 @@ class HNUser(entities.User):
                     self.atts[sub_type].append(submission)
                 except Exception as e:
                     self._print(f"Error in retrieving {sub_type} {id_val} in submission history of {self}.")
-                    if self.skip_submission_errors:
+                    if skip_submission_errors:
                         self._print("Skipping...")
                         continue
                     else:
@@ -94,14 +76,20 @@ class HNUser(entities.User):
             "success": True
         }
 
-    def check_derived_atts(self, submission_checklist=[]):
+    def check_derived_atts(self, submission_check_dict):
         
+        if not self.status['base']['values']:
+            return {
+                "success": False,
+                "message": f"This user does not have base attributes loaded."
+            }
+
         submission_lists = ["posts", "comments", "favorite_posts"]
 
         for submission_list in submission_lists:
             if self.atts[submission_list] != None:
                 for submission in self.atts[submission_list]:
-                    if not (submission.check(checklist=submission_checklist)):
+                    if not (submission.check(check_dict=submission_check_dict)):
                         return {
                             "success": False,
                             "message": f"{sub_type} {item} in their submission history fails check."
@@ -116,35 +104,40 @@ class HNUser(entities.User):
             "success": True
         }
 
+    custom_embedding_functions = {
+            "posts": {
+                "load": lambda p: p,
+                "store": lambda s, c: HNUser.embed_submission_history(s, "posts", c)
+            },
+            "comments": {
+                "load": lambda p: p,
+                "store": lambda s, c: HNUser.embed_submission_history(s, "comments", c)
+            },
+            "favorite_posts": {
+                "load": lambda p: p,
+                "store": lambda s, c: HNUser.embed_submission_history(s, "favorite_posts", c)
+            }
+    }
+
+class HNSubmissionLoader(entities.DerivedLoader):
+    def __init__(self, user_factory, load_author_submission_history=False, **kwargs):
+        super().__init__(**kwargs)
+
+        self.params['user_factory'] = user_factory
+        self.params['load_author_submission_history'] = load_author_submission_history
+
 ### author related stuff is stubbed out while testing, the datasets aren't full
 class HNSubmission(entities.Submission):
-    def __init__(self):
 
-        self.custom_embedding_functions = {
-            "author": {
-                "load": lambda p: p,
-                "store": self.embed_author
-            }
-        }
 
     def embed_author(self, chroma):
         return True
 
-    def _long_str(self):
-        contents = super()._long_str()
-
-        contents += "\t" + f"Author is {'' if self.has_author else 'not'} loaded." + "\n"
-
-        return contents
-
-    def load_derived_atts(self, sqlite=None, chroma=None, create_user_f=None):
+    def load_derived_atts(self, sqlite, user_factory=None, load_author_submission_history=False):
         self._print(f"Loading author of {self}...")
 
-        if create_user_f == None:
+        if user_factory == None:
             raise HNSubmissionLoadError(f"Error: attempted to load author of {self}, but did not provide create user object method.")
-
-        if not self.has_base_atts:
-            raise ItemLoadError(f"Error: attempted to load author of {self} that does not have attributes loaded.")
         
         self.atts['author'] = self.get_att('by')
         #self.atts['author'] = self.create_user_object(self.get_att("by"))
@@ -161,11 +154,17 @@ class HNSubmission(entities.Submission):
             "success": True
         }
 
-    def check_derived_atts(self, author_checklist=[]):
+    def check_derived_atts(self, author_check_dict=None):
 
+
+        if not self.status['base']['values']:
+            return {
+                "success": False,
+                "message": f"This user does not have base attributes loaded."
+            }
 
         """
-        if not self.atts['author'].check(checklist=author_checklist):
+        if not self.atts['author'].check(check_dict=author_check_dict):
             return {
                 "success": False,
                 "message": f"Author fails check."
@@ -176,16 +175,17 @@ class HNSubmission(entities.Submission):
             "success": True
         }
 
+    custom_embedding_functions = {
+        "author": {
+            "load": lambda p: p,
+            "store": lambda s, c: HNSubmission.embed_author(s, c)
+        }
+    }
+
 class HNPost(HNSubmission, entities.Root):
-    def __init__(self, *args, **kwargs):
-
-        HNSubmission.__init__(self)
-
-        entities.Root.__init__(self, *args, **kwargs)
+    def foo():
+        return
 
 class HNComment(HNSubmission, entities.Branch):
-    def __init__(self, *args, **kwargs):
-
-        HNSubmission.__init__(self)
-
-        entities.Branch.__init__(self, *args, **kwargs)
+    def foo():
+        return

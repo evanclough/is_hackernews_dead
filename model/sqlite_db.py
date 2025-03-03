@@ -88,9 +88,14 @@ class SqliteDB:
 
         atts = sorted(entity_model['attributes']['base'] + entity_model['attributes']['generated'], key=lambda a: a['sqlite_order'])
         zipped_results = [list(zip(atts, list(row_tuple))) for row_tuple in row_tuples]
-        converted_results = [[(att['name'], self.get_conversion(att['conversions']['load'])(val)) for att, val in r] for r in zipped_results]
+        att_dict_list = []
+        for row in zipped_results:
+            att_dict = {}
+            for att_model, val in row:
+                att_dict[att_model['name']] = self.get_conversion(att_model['conversions']['load'])(val)
+            att_dict_list.append(att_dict)
         
-        return converted_results
+        return att_dict_list
     
     """
         Insert some items to a given entity's table, given a list of attribute dicts

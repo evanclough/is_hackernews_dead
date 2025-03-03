@@ -9,6 +9,7 @@ import json
 import utils
 import dataset
 import HN_entities
+import entities
 
 """
     Tests for initializing the dataset with various options.
@@ -57,49 +58,107 @@ class InitTests(unittest.TestCase):
         Test loading base attributes for the user pool.
     """
     def test_base_upl(self):
-        self.test_dataset.user_pool.fetch_all_user_objects(load={'base': {'sqlite': self.test_dataset.sqlite}})
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True))
+        self.test_dataset.user_pool.fetch_all_user_objects(loader)
 
     """
         Test loading hn derived attributes
     """
-    def test_HN_derived_upl(self):
-        load_dict = {
-            'base': {
-                'sqlite': self.test_dataset.sqlite
-            },
-            'derived': {
-                'sqlite': self.test_dataset.sqlite,
-                'other': {
-                    'create_post_f': self.get_cpo(),
-                    'create_comment_f': self.get_cco(),
-                    'skip_submission_errors': True
-                }
-            }
-        }
-        self.test_dataset.user_pool.fetch_all_user_objects(load=load_dict)
+    def test_derived_upl(self):
+
+        sub_loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True))
+        post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True), derived=HN_entities.HNUserLoader(post_factory, comment_factory))
+        
+        self.test_dataset.user_pool.fetch_all_user_objects(loader=loader)
 
     """
         Test loading base attributes for the submission forest.
     """
     def test_base_sfl(self):
-        self.test_dataset.sf.dfs_roots(lambda a: a, load={'base': {'sqlite': self.test_dataset.sqlite}})
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True))
+
+        self.test_dataset.sf.dfs_roots(lambda a: a, loader=loader)
 
     """
         Test loading hn derived attributes
     """
-    def test_HN_derived_sfl(self):
-        load_dict = {
-            'base': {
-                'sqlite': self.test_dataset.sqlite
+    def test_derived_sfl(self):
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True), derived=HN_entities.HNSubmissionLoader(user_factory))
+
+        self.test_dataset.sf.dfs_roots(lambda a: a, loader=loader)
+
+
+    """
+        Test generating embeddings for the user pool.
+    """
+    def test_embed_up(self):
+        sub_loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True))
+        post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True), derived=HN_entities.HNUserLoader(post_factory, comment_factory))
+        
+        user_objects = self.test_dataset.user_pool.fetch_all_user_objects(loader=loader)
+        for user in user_objects:
+            user.generate_all_embeddings(self.test_dataset.chroma)
+
+    def test_embed_sf(self):
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True), derived=HN_entities.HNSubmissionLoader(user_factory))
+
+        self.test_dataset.sf.dfs_roots(lambda a: a['sub_obj'].generate_all_embeddings(self.test_dataset.chroma), loader=loader)
+
+    def test_load_up_embeddings(self):
+        sub_loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True))
+        post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True, embeddings=True), derived=HN_entities.HNUserLoader(post_factory, comment_factory, embeddings=True))
+        self.test_dataset.user_pool.fetch_all_user_objects(loader=loader)
+
+        check_dict = {
+            "base": {
+                "values": True,
+                "embeddings": True,
+                "checker_params": {}
             },
-            'derived': {
-                'sqlite': self.test_dataset.sqlite,
-                'other': {
-                    'create_user_f': self.get_cuo()
-                }
+            "derived": {
+                "values": True,
+                "embeddings": True,
+                "checker_params": {"submission_check_dict": {}}
             }
         }
-        self.test_dataset.sf.dfs_roots(lambda a: a, load=load_dict)
+
+        self.test_dataset.user_pool.clean(loader, check_dict=check_dict)
+
+    def test_load_sf_embeddings(self):
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True, embeddings=True), derived=HN_entities.HNSubmissionLoader(user_factory, embeddings=True))
+
+        self.test_dataset.sf.dfs_roots(lambda a: a, loader=loader)
+
+        check_dict = {
+            "base": {
+                "values": True,
+                "embeddings": True,
+                "checker_params": {}
+            },
+            "derived": {
+                "values": True,
+                "embeddings": True,
+                "checker_params": {"author_check_dict": {}}
+            }
+        }
+
+        self.test_dataset.sf.clean(loader, check_dict=check_dict)
+    
 
 
     """
@@ -107,6 +166,7 @@ class InitTests(unittest.TestCase):
     """
     def test_store_embeddings(self):
         
+
 
         user_source_dict = {
             'create_post_f': self.get_cpo(),

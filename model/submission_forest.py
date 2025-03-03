@@ -141,9 +141,9 @@ class SubmissionTreeNode:
     """
         Fetch the full submission object of this node with provided data sources
     """
-    def fetch_submission_object(self, load={}):
+    def fetch_submission_object(self, loader):
         submission_type = 'root' if self.is_root else 'branch'
-        submission_obj = self.entity_factory(submission_type, self.id, load=load)
+        submission_obj = self.entity_factory(submission_type, self.id, loader)
         return submission_obj
         
     """
@@ -152,11 +152,11 @@ class SubmissionTreeNode:
         generate a full feature set with it is present, and 
         if not, remove it.
     """
-    def clean(self, load={}, checklist={}):
+    def clean(self, loader, check_dict):
         try:
-            submission_obj = self.fetch_submission_object(load=load)
-            if submission_obj.check(checklist=checklist):
-                clean_kids = [kid for kid in self.kids if kid.clean(load=load, checklist=checklist)]
+            submission_obj = self.fetch_submission_object(loader)
+            if submission_obj.check(check_dict):
+                clean_kids = [kid for kid in self.kids if kid.clean(loader, check_dict)]
                 self.kids = clean_kids
                 return True
             else:
@@ -171,7 +171,7 @@ class SubmissionTreeNode:
     """
         Iterate through the descendants of this tree via a DFS, with provided data sources
     """
-    def dfs(self, f, load={}, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None):
+    def dfs(self, f, loader=None, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None):
 
         f_inp = {
             "st_node": self,
@@ -179,15 +179,15 @@ class SubmissionTreeNode:
             "desc_result": None
         }
         
-
-        f_inp["sub_obj"] = self.fetch_submission_object(load=load)
+        if loader != None:
+            f_inp["sub_obj"] = self.fetch_submission_object(loader)
 
         if filter_f != None:
             filter_res = filter_f(f_inp)
             if filter_res == False:
                 return None
 
-        kid_results = [kid.dfs(f, load=load, filter_f=filter_f, reduce_kids_f=reduce_kids_f,reduce_kids_acc=reduce_kids_acc) for kid in self.kids] 
+        kid_results = [kid.dfs(f, loader=loader, filter_f=filter_f, reduce_kids_f=reduce_kids_f,reduce_kids_acc=reduce_kids_acc) for kid in self.kids] 
 
         if reduce_kids_f != None:
             reduced = functools.reduce(reduce_kids_f, kid_results, reduce_kids_acc)
@@ -374,15 +374,15 @@ class SubmissionForest:
     """
         Run a DFS on all roots, with given parameters.
     """
-    def dfs_roots(self, f, load={}, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None):
-        return [root.dfs(f, load=load, filter_f=filter_f,
+    def dfs_roots(self, f, loader=None, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None):
+        return [root.dfs(f, loader=loader, filter_f=filter_f,
             reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc) for root in self.roots]
 
     """
         Clean all roots.
     """
-    def clean(self, load={}, checklist={}):
-        clean_roots = [root for root in self.roots if root.clean(load=load, checklist=checklist)]
+    def clean(self, loader, check_dict):
+        clean_roots = [root for root in self.roots if root.clean(loader, check_dict)]
         self.roots = clean_roots
 
     """

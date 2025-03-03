@@ -48,24 +48,24 @@ class UserPool:
         Get a user object of a given uid from this user pool, with given data sources.
         Raise an error if they're not present.
     """
-    def fetch_user_object(self, uid, load={}):
+    def fetch_user_object(self, uid, loader):
         if self.check_contains_user(uid):
-            return self.entity_factory("user", uid, load=load)
+            return self.entity_factory("user", uid, loader)
         else:
             raise UserNotFoundError(f"Error: attempt to fetch user object with uid {uid} not present in the user pool.")
 
     """
         Fetch the profile of a list of users, given their uids.
     """
-    def fetch_user_object_list(self, uid_list, load={}):
-        users = [self.fetch_user_object(uid, load=load) for uid in uid_list]
+    def fetch_user_object_list(self, uid_list, loader):
+        users = [self.fetch_user_object(uid, loader) for uid in uid_list]
         return users
 
     """
         Fetch the profiles of all users in the user pool.
     """
-    def fetch_all_user_objects(self, load={}):
-        return [self.entity_factory("user", uid, load=load) for uid in self.uids]
+    def fetch_all_user_objects(self, loader):
+        return [self.entity_factory("user", uid, loader) for uid in self.uids]
 
     """
         Check if this user pool contains a user with a given uid.
@@ -98,8 +98,8 @@ class UserPool:
         Clean this user pool by checking each user (by provided sources) and removing all
         who fail.
     """
-    def clean(self, load={}, checklist={}, derived_kwargs={}):
-        all_users = self.fetch_all_user_objects(load=load)
-        clean_uids = [user.get_id() for user in all_users if user.check(checklist=checklist)]
+    def clean(self, loader, check_dict):
+        all_users = self.fetch_all_user_objects(loader=loader)
+        clean_uids = [user.get_id() for user in all_users if user.check(check_dict)]
         self.set_uids(clean_uids)
     

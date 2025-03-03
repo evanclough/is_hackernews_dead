@@ -81,17 +81,16 @@ class Dataset:
             self.write_current_user_pool()
 
 
-    def embed(self, user_derived_sources={}, user_checklist={}, submission_derived_sources={}, submission_checklist={}):
+    def embed(self, user_pool, user_check={}, submission_derived_sources={}, submission_checklist={}):
         self._print(f"Generating and storing embeddings for dataset {self}...")
 
         self._print(f"Generating and storing embeddings for user pool...")
 
-        user_load_dict = {
-            'base': {'sqlite': self.sqlite}, 
-            'derived': {'sqlite': self.sqlite, 'other': user_derived_sources}
-        }
+        up_base_loader = entities.BaseLoader(source=entities.BaseSources.SQLITE)
+        up_derived_loader = entities.DerivedLoader(kwarg_dict=up_kwarg_dict)
+        up_loader = entities.EntityLoader(base=up_base_loader, derived=up_derived_loader)
 
-        self.user_pool.clean(load=user_load_dict, checklist=user_checklist)
+        self.user_pool.clean(load=up_loader, checklist=user_checklist)
 
         user_objects = self.user_pool.fetch_all_user_objects(load=user_load_dict)
 
@@ -113,8 +112,18 @@ class Dataset:
 
         self._print(f"Successfully generated and stored embeddings for submission forest.")
     
-    def entity_factory(self, entity_type, id_val, load={}):
-        return self.entity_classes[entity_type](self.entity_models[entity_type], id_val, load=load, verbose=self.verbose)
+    def entity_factory(self, entity_type, id_val, loader):
+        return self.entity_classes[entity_type](self.entity_models[entity_type], id_val, self.fill_loader(loader), verbose=self.verbose)
+
+    def fill_loader(self, loader):
+        loader.sqlite = self.sqlite
+        if loader.needs_sqlite:
+            loader.sqlite = self.sqlite
+        if loader.needs_chroma:
+            loader.chroma = self.chroma
+
+        return loader
+
 
     def get_data_source_path(self, filename):
         return self.dataset_path + "/" + filename
