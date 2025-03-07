@@ -25,7 +25,7 @@ class ChromaError(Exception):
     but looks like chroma doesnt have functionality for that. oh well.)
 """
 class ChromaDB:
-    def __init__(self, path,  embedding_config):
+    def __init__(self, path, entity_models, embedding_config):
         self.path = path
 
         self._truncate = embedding_config["truncate"]
@@ -33,20 +33,25 @@ class ChromaDB:
         self._embedding_model = embedding_config["model"]
         self._embedding_model_max_tokens = embedding_config["max_tokens"]
 
+
         self.embedding_function = utils.get_chroma_embedding_function(self._embedding_model)
         self.tokenizer = utils.get_embedding_tokenizer(self._embedding_model)
+
         self.client = chromadb.PersistentClient(path=self.path)
 
-    """
-        Create collections for each designated attribute for each entity
-    """
-    def create(self, entity_models):
+        self.check_update_collections(entity_models)
+
+    def check_update_collections(self, entity_models):
+        collection_names = self.client.list_collections()
         for entity_model in entity_models.values():
             for att_model_list in entity_model['attributes'].values():
                 for att_model in att_model_list:
                     if att_model['embed']:
-                        self.client.create_collection(name=f"{entity_model['table_name']}_{att_model['name']}", embedding_function=self.embedding_function)
-
+                        att_collection_name = f"{entity_model['table_name']}_{att_model['name']}"
+                        if not (att_collection_name in collection_names):
+                            self.client.create_collection(name=att_collection_name,
+                                embedding_function=self.embedding_function)
+    
     """
         Get a collection of a given attribute for a given entity.
     """

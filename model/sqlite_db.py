@@ -30,11 +30,28 @@ class InsertionError(Exception):
         self.message = message
         super().__init__(self.message)
 
+class MalformedSqliteDBError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+def check_column(index, column, att_model, table_name):
+    col_name = column[1]
+    col_type = column[2]
+
+    if col_name != att_model['name']:
+        raise MalformedSqliteDBError(f"Error: column {index} in table {table_name} with \
+            name {col_name} does not match designated name {att_model['name']}.")
+    if col_type != att_model['sqlite_type']:
+        raise MalformedSqliteDBError(f"Error: column {index} in table {table_name} with \
+            name {col_name} and type {col_type }does not match designated type {att_model['sqlite_type']}.")
+
+
 """
     A class to hold all methods used to access the database.
 """
 class SqliteDB:
-    def __init__(self, path):
+    def __init__(self, path, entity_models):
         self.path = path
 
         self.conversions = {
@@ -44,6 +61,11 @@ class SqliteDB:
 
         self.get_conversion = lambda a: (self.conversions[a] if a in self.conversions else (lambda b: b))
 
+        if utils.check_file_exists(self.path):
+            self.check_existing_db(entity_models)
+        else:
+            self.create(entity_models)
+
     def _with_db(func):
         @functools.wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -52,6 +74,48 @@ class SqliteDB:
                 self.cursor = conn.cursor()
                 return func(self, *args, **kwargs)
         return wrapper
+
+    @_with_db
+    def add_cols(self, table_name, att_models):
+
+        att_models = sorted(att_models, key=lambda a: a['sqlite_order'])
+
+        for att_model in att_models:
+            self.cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {att_model['name']} {att_model['sqlite_type']}")
+
+        self.conn.commit()
+
+    @_with_db
+    def check_existing_db(self, entity_models):
+        for entity_model in entity_models.values():
+            self.cursor.execute(f"PRAGMA table_info({entity_model['table_name']})")
+
+            columns = self.cursor.fetchall()
+            num_cols = len(columns)
+
+            base_att_models = sorted(entity_model['attributes']['base'], key=lambda a: a['sqlite_order'])
+            num_base_atts = len(base_att_models)
+            generated_att_models = sorted(entity_model['attributes']['generated'], key=lambda a: a['sqlite_order'])
+            num_generated_atts = len(generated_att_models)
+            num_table_atts = num_base_atts + num_generated_atts
+
+            if num_cols < num_base_atts and num_cols >= num_table_atts:
+                raise MalformedSqliteDBError(f"Error: table {entity_model['table_name']} in existing sqlite database has improper number of columns.")
+
+            for base_att_index in range(num_base_atts):
+                column = columns[base_att_index]
+                att_model = base_att_models[base_att_index]
+                check_column(base_att_index, column, att_model, entity_model['table_name'])
+
+            gen_att_index = 0
+            while num_base_atts + gen_att_index < num_cols:
+                column = columns[num_base_atts + gen_att_index]
+                att_model = generated_att_models[gen_att_index]
+                check_column(num_base_atts + gen_att_index, column, att_model, entity_model['table_name'])
+
+            remaining_gen_atts = generated_att_models[num_base_atts:]
+
+            self.add_cols(entity_model['table_name'], remaining_gen_atts)
 
     """
         Create the sqlite database and the needed tables at the specified path.

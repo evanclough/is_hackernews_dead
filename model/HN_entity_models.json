@@ -110,7 +110,26 @@
                     "is_list": true
                 }
             ],
-            "generated": []
+            "generated": [
+                {
+                    "name": "test_gen_att1",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 9,
+                    "embed": false
+                },
+                {
+                    "name": "test_gen_att2",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 8,
+                    "embed": true
+                },
+                {
+                    "name": "test_gen_att3",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 10,
+                    "embed": true
+                }
+            ]
         }
     },
     "root": {

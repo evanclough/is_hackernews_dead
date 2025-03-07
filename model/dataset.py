@@ -50,21 +50,14 @@ class Dataset:
         else:
             self.entity_models = utils.read_json(utils.fetch_env_var("DEFAULT_ENTITY_MODELS"))
 
-
-        has_sqlite = utils.check_file_exists(self.sqlite_path)
-        self.sqlite = sqlite_db.SqliteDB(self.sqlite_path)
-        if not has_sqlite:
-            self.sqlite.create(self.entity_models)
+        self.sqlite = sqlite_db.SqliteDB(self.sqlite_path, self.entity_models)
 
         if embedding_config == None:
             self.embedding_config = utils.read_json(utils.fetch_env_var("DEFAULT_EMBEDDING_CONFIG"))
         else:
             self.embedding_config = embedding_config
 
-        has_chroma = utils.check_directory_exists(self.chroma_path)
-        self.chroma = chroma_db.ChromaDB(self.chroma_path, self.embedding_config)
-        if not has_chroma:
-            self.chroma.create(self.entity_models)
+        self.chroma = chroma_db.ChromaDB(self.chroma_path, self.entity_models, self.embedding_config)
 
         has_sf = utils.check_file_exists(self.sf_path)
         if has_sf:
