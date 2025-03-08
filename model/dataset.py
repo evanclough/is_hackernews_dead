@@ -14,6 +14,7 @@ import chroma_db
 import user_pool
 import submission_forest
 import HN_entities
+import llms
 
 """
     An exception class for general dataset errors.
@@ -23,7 +24,7 @@ class DatasetError(Exception):
         super().__init__(message)
 
 class Dataset:
-    def __init__(self, name, entity_classes, data_source_file_names=None, embedding_config=None, verbose=False):
+    def __init__(self, name, entity_classes, data_source_file_names=None, llm_config=None, embedding_config=None, verbose=False):
 
         self.name = name
         self.entity_classes = entity_classes
@@ -58,6 +59,13 @@ class Dataset:
             self.embedding_config = embedding_config
 
         self.chroma = chroma_db.ChromaDB(self.chroma_path, self.entity_models, self.embedding_config)
+
+        if llm_config == None:
+            self.llm_config = utils.read_json(utils.fetch_env_var("DEFAULT_LLM_CONFIG"))
+        else:
+            self.llm_config = llm_config
+
+        self.llm = llms.get_llm(self.llm_config)
 
         has_sf = utils.check_file_exists(self.sf_path)
         if has_sf:

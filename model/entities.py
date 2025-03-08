@@ -251,7 +251,7 @@ class Entity:
         prompt_template = Template(att_model['prompt_template'])
         prompt = prompt_template.render(**self.atts, **additional_context)
 
-        result = prompt # llm.complete(prompt)
+        result = llm.complete(prompt)
 
         self.set_att(att, result)
         

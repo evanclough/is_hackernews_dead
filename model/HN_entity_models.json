@@ -145,7 +145,7 @@
                         "load": "none",
                         "store": "none"
                     },
-                    "prompt_template": "{{about}}"
+                    "prompt_template": "draw me an ascii smiley face please"
                 }
             ]
         }

@@ -483,9 +483,7 @@ class GenTests(unittest.TestCase):
         
         new_user = self.test_dataset.entity_factory("user", self.test_username, loader)
 
-        new_user.generate_attribute("test_gen_att1", None)
-        new_user.generate_attribute("test_gen_att2", None)
-        new_user.generate_attribute("test_gen_att3", None)
+        new_user.generate_attribute("test_gen_att3", self.test_dataset.llm)
         new_user.pupdate_in_sqlite(self.test_dataset.sqlite)
         new_user.pupdate_in_chroma(self.test_dataset.chroma)
 
