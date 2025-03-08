@@ -120,7 +120,8 @@
                     "conversions": {
                         "load": "none",
                         "store": "none"
-                    }
+                    },
+                    "prompt_template": "{% for comment in comments %} {{ comment.get_prompt_str() }} {% endfor %}"
                 },
                 {
                     "name": "test_gen_att2",
@@ -131,7 +132,8 @@
                     "conversions": {
                         "load": "none",
                         "store": "none"
-                    }
+                    },
+                    "prompt_template": "{% for post in posts %} {{ post.get_prompt_str() }} {% endfor %}"
                 },
                 {
                     "name": "test_gen_att3",
@@ -142,7 +144,8 @@
                     "conversions": {
                         "load": "none",
                         "store": "none"
-                    }
+                    },
+                    "prompt_template": "{{about}}"
                 }
             ]
         }

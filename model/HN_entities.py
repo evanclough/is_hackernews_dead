@@ -5,7 +5,17 @@ class HNUserLoadError(Exception):
     def __init__(self, message):
         super().__init__(message)
 
+class HNUserStoreError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
+
 class HNSubmissionLoadError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+class HNSubmissionStoreError(Exception):
     def __init__(self, message):
         super().__init__(message)
 
@@ -71,6 +81,11 @@ class HNUser(entities.User):
 
     
     def check_base_atts(self):
+        return {
+            "success": True
+        }
+    
+    def check_generated_atts(self):
         return {
             "success": True
         }
@@ -158,6 +173,11 @@ class HNSubmission(entities.Submission):
             "success": True
         }
 
+    def check_generated_atts(self):
+        return {
+            "success": True
+        }
+
     def check_embeddings(self):
         return {
             "success": True
@@ -195,6 +215,9 @@ class HNSubmission(entities.Submission):
     def pupdate_in_sqlite(self, sqlite, sub_type):
         super().pupdate_in_sqlite(sqlite)
 
+        if self.atts['author'] == None:
+            raise HNSubmissionStoreError(f"Error: attempted to update {self} in sqlite, but author is not loaded.")
+            
         id_col = "post_ids" if sub_type == "post" else "comment_ids"
         author_ids = self.atts['author'].get_att(id_col)
         if not (self.id in author_ids):
@@ -203,6 +226,9 @@ class HNSubmission(entities.Submission):
 
     def delete_from_sqlite(self, sqlite, sub_type):
         super().delete_from_sqlite(sqlite)
+        
+        if self.atts['author'] == None:
+            raise HNSubmissionStoreError(f"Error: attempted to remove {self} from sqlite, but author is not loaded.")
 
         id_col = "post_ids" if sub_type == "post" else "comment_ids"
         author_ids = self.atts['author'].get_att(id_col)
@@ -218,6 +244,9 @@ class HNPost(HNSubmission, entities.Root):
     def delete_from_sqlite(self, sqlite):
         HNSubmission.delete_from_sqlite(self, sqlite, "post")
 
+    def get_prompt_str(self):
+        return "POST: " + self.get_att("text")
+
 
 class HNComment(HNSubmission, entities.Branch):
 
@@ -227,3 +256,6 @@ class HNComment(HNSubmission, entities.Branch):
     
     def delete_from_sqlite(self, sqlite):
         HNSubmission.delete_from_sqlite(self, sqlite, "comment")
+
+    def get_prompt_str(self):
+        return "COMMENT: " + self.get_att("text")

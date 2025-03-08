@@ -192,6 +192,9 @@ class SqliteDB:
     """
     @_with_db
     def update(self, entity_model, where_dict, update_dict):
+        if len(update_dict.keys()) == 0:
+            return
+
         all_atts = sorted(entity_model['attributes']['base'] + entity_model['attributes']['generated'], key=lambda a: a['sqlite_order'])
         updating_atts = [att for att in all_atts if att['name'] in update_dict]
         for att in updating_atts:

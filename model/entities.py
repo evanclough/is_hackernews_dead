@@ -3,6 +3,7 @@
 """
 
 import utils
+from jinja2 import Template
 from sqlite_db import UniqueDBItemNotFound
 from chroma_db import EmbeddingsNotFoundError
 
@@ -45,7 +46,7 @@ class DerivedLoader(AttClassLoader):
         super().__init__("derived", **kwargs)
 
 class EntityLoader:
-    def __init__(self, base=None, derived=None):
+    def __init__(self, base=None, derived=None, generated=None):
         self.sqlite = None
         self.chroma = None
         self.needs_sqlite = False
@@ -53,7 +54,8 @@ class EntityLoader:
 
         self.base = base
         self.derived = derived
-        self.att_classes = [self.base, self.derived]
+        self.generated = generated
+        self.att_classes = [self.base, self.derived, self.generated]
 
         for att_class in self.att_classes:
             if att_class != None:
@@ -87,6 +89,11 @@ class Entity:
                 "values": False,
                 "embeddings": False,
                 "checker": self.check_derived_atts
+            },
+            "generated": {
+                "values": False,
+                "embeddings": False,
+                "checker": self.check_generated_atts
             }
         }
 
@@ -118,6 +125,13 @@ class Entity:
             self.load_derived_atts(loader.sqlite, **loader.derived.params)
             self.status['derived']['values'] = True
 
+        if loader.generated != None:
+            if loader.generated.from_sqlite:
+                self._load_from_sqlite('generated', loader.sqlite)
+                self.status['generated']['values'] = True
+            if loader.generated.from_att_dict:
+                self._load_from_att_dict('base', loader.generated.att_dict)
+                self.status['generated']['values'] = True
 
         for att_class in loader.att_classes:
             if att_class != None:
@@ -208,7 +222,7 @@ class Entity:
         self._print(f"Successfully deleted {self} from chroma.")
 
     def pupdate_in_chroma(self, chroma):
-        self._print(f"Generating embeddings for {self} and storing in chroma...")
+        self._print(f"Generating/updating embeddings for {self} and storing in chroma...")
         for att_class in self.entity_model['attributes'].values():
             for att_model in att_class:
                 if att_model['embed'] and self.atts[att_model['name']] != None:
@@ -222,7 +236,25 @@ class Entity:
                                 chroma.update(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
                         except EmbeddingsNotFoundError as e:
                             chroma.generate(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
+        self._print(f"Successfully generated/updated embeddings for {self} and stored in chroma.")
 
+
+
+    def generate_attribute(self, att, llm, additional_context={}):
+        att_model = [gen_att for gen_att in self.entity_model['attributes']['generated'] if gen_att['name'] == att]
+
+        if len(att_model) == 0:
+            raise KeyError(f"Error: attempted to generate attribute {att} for {self}, but it is not a specified generated attribute.")
+
+        att_model = att_model[0]
+
+        prompt_template = Template(att_model['prompt_template'])
+        prompt = prompt_template.render(**self.atts, **additional_context)
+
+        result = prompt # llm.complete(prompt)
+
+        self.set_att(att, result)
+        
 
     def set_verbose(self, verbose):
         self.verbose = verbose
@@ -242,6 +274,7 @@ class Entity:
             return self.atts[att]
         else:
             raise KeyError(f"Attempted to retrieve non-existant attribute {att} from {self}")
+
 
     def get_embeddings(self, att):
         if att in self.embeddings:

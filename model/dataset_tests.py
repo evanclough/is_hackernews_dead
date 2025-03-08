@@ -456,5 +456,47 @@ class CrudTests(unittest.TestCase):
         self.test_insertion()
         self.test_removal()
 
+class GenTests(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.entity_classes = {
+            "user": HN_entities.HNUser,
+            "root": HN_entities.HNPost,
+            "branch": HN_entities.HNComment
+        }
+        cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
+        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes, verbose=True)
+        cls.insertion_num = 55555
+        cls.test_username = f"test_username{cls.insertion_num}"
+
+        print(f"Running sqlite tests on existing dataset {cls.test_dataset_name}...")
+        print(f"test insertion number: {cls.insertion_num}")
+
+    def test_basic(self):
+        sub_loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True))
+        post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        base_loader = entities.BaseLoader(from_sqlite=True, embeddings=True)
+        der_loader = HN_entities.HNUserLoader(post_factory, comment_factory)
+        loader = entities.EntityLoader(base=base_loader, derived=der_loader)
+        
+        new_user = self.test_dataset.entity_factory("user", self.test_username, loader)
+
+        new_user.generate_attribute("test_gen_att1", None)
+        new_user.generate_attribute("test_gen_att2", None)
+        new_user.generate_attribute("test_gen_att3", None)
+        new_user.pupdate_in_sqlite(self.test_dataset.sqlite)
+        new_user.pupdate_in_chroma(self.test_dataset.chroma)
+
+        loader = entities.EntityLoader(base=base_loader, derived=der_loader, generated=base_loader)
+        user = self.test_dataset.entity_factory("user", self.test_username, loader)
+        print(user.get_att("test_gen_att1"))
+        print(user.get_att("test_gen_att2"))
+        print(user.get_att("test_gen_att3"))
+
+        
+        
+
 if __name__ == '__main__':
     unittest.main()
