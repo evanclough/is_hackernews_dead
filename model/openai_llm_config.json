@@ -4,7 +4,7 @@
     "dev_prompt": "You are a helpful assistant.",
     "context_window": 128000,
     "max_output_tokens": 16384,
-    "input_token_cost": 0.15,
-    "cached_input_token_cost": 0.075,
-    "output_token_cost": 0.6
+    "input_token_cost": 0.00000015,
+    "cached_input_token_cost": 0.000000075,
+    "output_token_cost": 0.0000006
 }
