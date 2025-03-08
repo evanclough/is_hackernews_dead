@@ -6,8 +6,6 @@ import datetime
 import json
 import functools
 
-from openai import OpenAI
-
 import utils
 import sqlite_db
 import chroma_db
@@ -15,6 +13,7 @@ import user_pool
 import submission_forest
 import HN_entities
 import llms
+import embeddings
 
 """
     An exception class for general dataset errors.
@@ -58,7 +57,9 @@ class Dataset:
         else:
             self.embedding_config = embedding_config
 
-        self.chroma = chroma_db.ChromaDB(self.chroma_path, self.entity_models, self.embedding_config)
+        self.embedding_model = embeddings.get_embedding_model(self.embedding_config)
+
+        self.chroma = chroma_db.ChromaDB(self.chroma_path, self.entity_models, self.embedding_model)
 
         if llm_config == None:
             self.llm_config = utils.read_json(utils.fetch_env_var("DEFAULT_LLM_CONFIG"))

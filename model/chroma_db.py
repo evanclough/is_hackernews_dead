@@ -34,17 +34,10 @@ class GenerateNullEmbeddingsError(Exception):
     but looks like chroma doesnt have functionality for that. oh well.)
 """
 class ChromaDB:
-    def __init__(self, path, entity_models, embedding_config):
+    def __init__(self, path, entity_models, embedding_model):
         self.path = path
 
-        self._truncate = embedding_config["truncate"]
-        self._truncate_increment = embedding_config["truncate_increment"]
-        self._embedding_model = embedding_config["model"]
-        self._embedding_model_max_tokens = embedding_config["max_tokens"]
-
-
-        self.embedding_function = utils.get_chroma_embedding_function(self._embedding_model)
-        self.tokenizer = utils.get_embedding_tokenizer(self._embedding_model)
+        self.embedding_model = embedding_model
 
         self.client = chromadb.PersistentClient(path=self.path)
 
@@ -59,13 +52,13 @@ class ChromaDB:
                         att_collection_name = f"{entity_model['table_name']}_{att_model['name']}"
                         if not (att_collection_name in collection_names):
                             self.client.create_collection(name=att_collection_name,
-                                embedding_function=self.embedding_function)
+                                embedding_function=self.embedding_model.get_chroma_embedding_function())
     
     """
         Get a collection of a given attribute for a given entity.
     """
     def get_collection(self, entity_model, att):
-        return self.client.get_collection(name=f"{entity_model['table_name']}_{att}", embedding_function=self.embedding_function)
+        return self.client.get_collection(name=f"{entity_model['table_name']}_{att}", embedding_function=self.embedding_model.get_chroma_embedding_function())
 
 
     """
@@ -104,13 +97,8 @@ class ChromaDB:
         documents = [("EMPTY" if doc == "" else doc) for doc in documents]
 
         for i in range(len(documents)):
-            if self.tokenizer(documents[i]) > self._embedding_model_max_tokens:
-                if self._truncate:
-                    print(f"Document {entity_type}_{att} with id {ids[i]} exceeds the token maximum for the given embedding model. Truncating until it does...")
-                    while self.tokenizer(documents[i]) > self._embedding_model_max_tokens:
-                        documents[i] = documents[i][:-self._truncate_increment]
-                else:
-                    raise ChromaError(f"Document with id {ids[i]} exceeds the token maximum for the given embedding model.")
+            if self.embedding_model.tokenize(documents[i]) > self.embedding_model.max_tokens:
+                raise ChromaError(f"Error: attempted to generate embeddings for document with id {metadatas[i]['id_val'] if att_model['is_list'] else ids[i]}")
 
         collection = self.get_collection(entity_model, att_model['name'])
 

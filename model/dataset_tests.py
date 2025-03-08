@@ -491,7 +491,7 @@ class GenTests(unittest.TestCase):
         user = self.test_dataset.entity_factory("user", self.test_username, loader)
         print(user.get_att("test_gen_att3"))
 
-    def test_cost_estimate(self):
+    def test_llm_cost_estimate(self):
         self.test_dataset.llm.estimate_prompt_cost("TEST581985715981752", "ADSKJALKJALSFKJFA", accrue=True)
         self.test_dataset.llm.estimate_prompt_cost("TEST581985715981752", "ADSKJALKJALSFKJFA", accrue=True)
         self.test_dataset.llm.print_accrued_costs()
@@ -501,8 +501,10 @@ class GenTests(unittest.TestCase):
         self.test_dataset.llm.estimate_prompt_cost("TEST581985715981752", "ADSKJALKJALSFKJFA", accrue=True)
         self.test_dataset.llm.print_accrued_costs()
 
-        
+    def test_EM_cost_estimate(self):
+        self.test_dataset.embedding_model.estimate_doc_cost("TEST581985715981752", accrue=True)
 
+        self.test_dataset.embedding_model.print_accrued_costs()
         
         
 

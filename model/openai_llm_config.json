@@ -1,5 +1,5 @@
 {
-    "name": "openai 4o mini",
+    "name": "gpt-4o-mini",
     "model_name": "gpt-4o-mini",
     "dev_prompt": "You are a helpful assistant.",
     "context_window": 128000,

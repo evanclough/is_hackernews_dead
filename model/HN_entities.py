@@ -217,7 +217,7 @@ class HNSubmission(entities.Submission):
 
         if self.atts['author'] == None:
             raise HNSubmissionStoreError(f"Error: attempted to update {self} in sqlite, but author is not loaded.")
-            
+
         id_col = "post_ids" if sub_type == "post" else "comment_ids"
         author_ids = self.atts['author'].get_att(id_col)
         if not (self.id in author_ids):

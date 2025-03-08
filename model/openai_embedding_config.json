@@ -1,7 +1,6 @@
 {
-    "model": "openai_large",
+    "name": "openai",
+    "model_name": "text-embedding-3-large",
     "max_tokens": 8192,
-    "truncate": true,
-    "truncate_increment": 1000,
     "input_token_cost": 0.00000013
 }

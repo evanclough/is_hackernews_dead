@@ -7,7 +7,7 @@ class LLMError(Exception):
 
 def get_llm(llm_config):
     llms = {
-        "openai 4o mini": OpenAILLM
+        "gpt-4o-mini": OpenAILLM
     }
 
     if not ('name' in llm_config):
