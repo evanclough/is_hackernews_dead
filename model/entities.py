@@ -3,7 +3,8 @@
 """
 
 import utils
-from enum import Enum
+from sqlite_db import UniqueDBItemNotFound
+from chroma_db import EmbeddingsNotFoundError
 
 class LoaderError(Exception):
     def __init__(self, message):
@@ -132,7 +133,7 @@ class Entity:
 
     def _load_from_att_dict(self, att_class, att_dict):
         self._print(f"Manually populating base attributes from given dict for {self}...")
-        for att in self.entity_model['attrbutes'][att_class]:
+        for att in self.entity_model['attributes'][att_class]:
             if att['name'] in att_dict:
                 self.atts[att['name']] = att_dict[att['name']]
             else:
@@ -153,34 +154,74 @@ class Entity:
 
         self._print(f"Successfully loaded attributes from sqlite for {self}.")
 
+    def pupdate_in_sqlite(self, sqlite):
+        try:
+            self._print(f"Updating {self} in sqlite...")
+            current_sqlite_row = sqlite.get_by_id(self.entity_model, self.id)
+            sqlite_atts = self.entity_model['attributes']['base'] + self.entity_model['attributes']['generated']
+
+            update_dict = {}
+
+            for att_name, sqlite_val in current_sqlite_row.items():
+                if self.atts[att_name] != sqlite_val:
+                    self._print(f"Updating {att_name} from {sqlite_val} to {self.atts[att_name]}")
+                    update_dict[att_name] = self.atts[att_name]
+
+            sqlite.update_by_id(self.entity_model, self.id, update_dict)
+
+            self._print(f"Successfully updated {self} in sqlite.")
+        except UniqueDBItemNotFound as e:
+            self._print(f"Inserting {self} into sqlite...")
+            sqlite.insert(self.entity_model, [self.atts])
+            self._print(f"Successfully inserted {self} into sqlite.")
+
+    def delete_from_sqlite(self, sqlite):
+        self._print(f"Deleting {self} from sqlite...")
+
+        sqlite.delete_by_id_list(self.entity_model, [self.id])
+
+        self._print(f"Successfully deleted {self} from sqlite.")
 
     def _load_from_chroma(self, att_class, chroma):
         for att_model in self.entity_model['attributes'][att_class]:
             if att_model['embed']:
                 if att_model['name'] in self.custom_embedding_functions:
-                    self.custom_embedding_functions[att_model['name']]['load'](chroma)
+                    self.custom_embedding_functions[att_model['name']]['load'](self, chroma)
                 else:
-                    embeddings = chroma.retrieve(self.entity_model, att_model, [self.id])
-                    self.embeddings[att_model['name']] = embeddings
+                    embeddings = chroma.retrieve(self.entity_model, att_model, self.id)
+                    self.embeddings[att_model['name']] = embeddings['embeddings']
 
 
         self._print(f"Successfully loaded embeddings from chroma for {self}.")
 
-    def generate_embeddings(self, att_class, chroma):
-        self._print(f"Generating embeddings and storing in chroma for {att_class} attributes of {self}...")
-        if not self.status[att_class]['values']:
-            raise LoaderError(f"Error: attempted to store embeddings for {att_class} attributes of {self}, but values are not loaded.")
-        for att_model in self.entity_model['attributes'][att_class]:
-            if att_model['embed']:
-                if att_model['name'] in self.custom_embedding_functions:
-                    self.custom_embedding_functions[att_model['name']]['store'](self, chroma)
-                else:
-                    chroma.generate(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
+    def delete_from_chroma(self, chroma):
+        self._print(f"Deleting {self} from chroma... ")
 
-    def generate_all_embeddings(self, chroma):
-        for att_class_name, att_class in self.status.items():
-            if att_class['values']:
-                self.generate_embeddings(att_class_name, chroma)
+        for att_class in self.entity_model['attributes'].values():
+            for att_model in att_class:
+                if att_model['embed']:
+                    if att_model['name'] in self.custom_embedding_functions:
+                        self.custom_embedding_functions[att_model['name']]['delete'](self, chroma)
+                    else:
+                        chroma.delete(self.entity_model, att_model, [self.id])
+
+        self._print(f"Successfully deleted {self} from chroma.")
+
+    def pupdate_in_chroma(self, chroma):
+        self._print(f"Generating embeddings for {self} and storing in chroma...")
+        for att_class in self.entity_model['attributes'].values():
+            for att_model in att_class:
+                if att_model['embed'] and self.atts[att_model['name']] != None:
+                    if att_model['name'] in self.custom_embedding_functions:
+                        self.custom_embedding_functions[att_model['name']]['pupdate'](self, chroma)
+                    else:
+                        try:
+                            current_embedded_val = chroma.retrieve(self.entity_model, att_model, self.id)['value']
+                            if self.atts[att_model['name']] != current_embedded_val:
+                                self._print(f"Updating embeddings for {att_model['name']}...")
+                                chroma.update(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
+                        except EmbeddingsNotFoundError as e:
+                            chroma.generate(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
 
 
     def set_verbose(self, verbose):

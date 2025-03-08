@@ -79,7 +79,7 @@ class SubmissionTreeNode:
         Add a kid to this node, given an id.
     """
     def add_kid(self, kid_id):
-        kid = SubmissionTreeNode({"id": kid_id, "kids": []}, parent=parent)
+        kid = SubmissionTreeNode({"id": kid_id, "kids": []}, parent=self)
         new_kids = [*self.kids, kid]
         self.kids = new_kids
 
@@ -105,7 +105,7 @@ class SubmissionTreeNode:
         Add a kid to some descendant of this node, given a child and parent id.
     """
     def add_descendant(self, desc_id, kid_id):
-        parent = self.get_submission(desc_id)
+        parent = self.get_descendant(desc_id)
         parent.add_kid(kid_id)
 
     """
@@ -113,7 +113,7 @@ class SubmissionTreeNode:
         If successful, return true, if not present, or the retrieved item is a root, return false
     """
     def remove_descendant(self, desc_id):
-        submission = self.get_submission(desc_id)
+        submission = self.get_descendant(desc_id)
         if submission == None:
             return False
         else:
@@ -289,12 +289,12 @@ class SubmissionForest:
         Get an submission's node if it exists among member trees, otherwise, raise an error.
     """
     def get_submission(self, sub_id):
-        potential_submissions = [root.get_submission(sub_id) for root in self.roots]
+        potential_submissions = [root.get_descendant(sub_id) for root in self.roots]
         filtered_submissions = [res for res in potential_submissions if res != None]
         if len(filtered_submissions) == 0:
             raise SubmissionForestError(f"Error: Submission with id {sub_id} not found in {self}")
         elif len(filtered_submissions) == 1:
-            return filtered_submissions[1]
+            return filtered_submissions[0]
         else: 
             raise SubmissionForestError(f"Error: Submission with id {sub_id} found in multiple roots of {self}")
 

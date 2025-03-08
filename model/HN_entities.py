@@ -21,7 +21,11 @@ class HNUser(entities.User):
 
     def embed_submission_history(self, sub_type, chroma):
         for submission_object in self.atts[sub_type]:
-            submission_object.generate_all_embeddings(chroma)
+            submission_object.pupdate_in_chroma(chroma)
+
+    def delete_sub_his_embeddings(self, sub_type, chroma):
+        for submission_object in self.atts[sub_type]:
+            submission_object.delete_from_chroma(chroma)
 
     """
         Store all of the user's submission items.
@@ -105,18 +109,21 @@ class HNUser(entities.User):
         }
 
     custom_embedding_functions = {
-            "posts": {
-                "load": lambda p: p,
-                "store": lambda s, c: HNUser.embed_submission_history(s, "posts", c)
-            },
-            "comments": {
-                "load": lambda p: p,
-                "store": lambda s, c: HNUser.embed_submission_history(s, "comments", c)
-            },
-            "favorite_posts": {
-                "load": lambda p: p,
-                "store": lambda s, c: HNUser.embed_submission_history(s, "favorite_posts", c)
-            }
+        "posts": {
+            "load": lambda s, c: 0,
+            "pupdate": lambda s, c: HNUser.embed_submission_history(s, "posts", c),
+            "delete": lambda s, c: HNUser.delete_sub_his_embeddings(s, "posts", c)
+        },
+        "comments": {
+            "load": lambda s, c: 0,
+            "pupdate": lambda s, c: HNUser.embed_submission_history(s, "comments", c),
+            "delete": lambda s, c: HNUser.delete_sub_his_embeddings(s, "comments", c)
+        },
+        "favorite_posts": {
+            "load": lambda s, c: 0,
+            "pupdate": lambda s, c: HNUser.embed_submission_history(s, "favorite_posts", c),
+            "delete": lambda s, c: HNUser.delete_sub_his_embeddings(s, "favorite_posts", c)
+        }
     }
 
 class HNSubmissionLoader(entities.DerivedLoader):
@@ -131,6 +138,9 @@ class HNSubmission(entities.Submission):
 
 
     def embed_author(self, chroma):
+        self.atts['author'].pupdate_in_chroma(chroma)
+
+    def delete_author_embeddings(self, chroma):
         return True
 
     def load_derived_atts(self, sqlite, user_factory=None, load_author_submission_history=False):
@@ -139,8 +149,7 @@ class HNSubmission(entities.Submission):
         if user_factory == None:
             raise HNSubmissionLoadError(f"Error: attempted to load author of {self}, but did not provide create user object method.")
         
-        self.atts['author'] = self.get_att('by')
-        #self.atts['author'] = self.create_user_object(self.get_att("by"))
+        self.atts['author'] = user_factory(self.get_att("by"))
         
         self._print(f"Successfully loaded author of {self}.")
 
@@ -177,15 +186,44 @@ class HNSubmission(entities.Submission):
 
     custom_embedding_functions = {
         "author": {
-            "load": lambda p: p,
-            "store": lambda s, c: HNSubmission.embed_author(s, c)
+            "load": lambda s, c: 0,
+            "pupdate": lambda s, c: HNSubmission.embed_author(s, c),
+            "delete": lambda s, c: HNSubmission.delete_author_embeddings(s, c)
         }
     }
 
+    def pupdate_in_sqlite(self, sqlite, sub_type):
+        super().pupdate_in_sqlite(sqlite)
+
+        id_col = "post_ids" if sub_type == "post" else "comment_ids"
+        author_ids = self.atts['author'].get_att(id_col)
+        if not (self.id in author_ids):
+            self.atts['author'].set_att(id_col, [*author_ids, self.id])
+            self.atts['author'].pupdate_in_sqlite(sqlite)
+
+    def delete_from_sqlite(self, sqlite, sub_type):
+        super().delete_from_sqlite(sqlite)
+
+        id_col = "post_ids" if sub_type == "post" else "comment_ids"
+        author_ids = self.atts['author'].get_att(id_col)
+        new_author_ids = [id_val for id_val in author_ids if id_val != self.id]
+        self.atts['author'].set_att(id_col, new_author_ids)
+        self.atts['author'].pupdate_in_sqlite(sqlite)
+
 class HNPost(HNSubmission, entities.Root):
-    def foo():
-        return
+
+    def pupdate_in_sqlite(self, sqlite):
+        HNSubmission.pupdate_in_sqlite(self, sqlite, "post")
+
+    def delete_from_sqlite(self, sqlite):
+        HNSubmission.delete_from_sqlite(self, sqlite, "post")
+
 
 class HNComment(HNSubmission, entities.Branch):
-    def foo():
-        return
+
+    def pupdate_in_sqlite(self, sqlite):
+        HNSubmission.pupdate_in_sqlite(self, sqlite, "comment")
+
+    
+    def delete_from_sqlite(self, sqlite):
+        HNSubmission.delete_from_sqlite(self, sqlite, "comment")

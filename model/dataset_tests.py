@@ -242,10 +242,16 @@ class CrudTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.entity_classes = {
+            "user": HN_entities.HNUser,
+            "root": HN_entities.HNPost,
+            "branch": HN_entities.HNComment
+        }
         cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
-        cls.dataset = dataset.Dataset(cls.test_dataset_name, existing_dataset_name=cls.test_dataset_name, verbose=True)
+        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes, verbose=True)
         cls.insertion_num = 55555
         cls.test_username = f"test_username{cls.insertion_num}"
+
         print(f"Running sqlite tests on existing dataset {cls.test_dataset_name}...")
         print(f"test insertion number: {cls.insertion_num}")
 
@@ -254,7 +260,7 @@ class CrudTests(unittest.TestCase):
         (doesn't actually do anything)
     """
     def test_init(self):
-        self.assertIsNotNone(self.dataset)
+        self.assertIsNotNone(self.test_dataset)
 
     """
         Test inserting a new user to the user pool. (no post history)
@@ -265,13 +271,24 @@ class CrudTests(unittest.TestCase):
             "about": "test about",
             "karma": 4,
             "created": int(time.time()),
-            "user_class": "test",
+            "user_class": "test user class",
             "post_ids": [],
             "comment_ids": [],
             "favorite_post_ids": []
         }
+        sub_loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True))
+        post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_att_dict=True, att_dict=user_dict), derived=HN_entities.HNUserLoader(post_factory, comment_factory))
+        new_user = self.test_dataset.entity_factory("user", self.test_username, loader)
+        new_user.pupdate_in_sqlite(self.test_dataset.sqlite)
+        new_user.pupdate_in_chroma(self.test_dataset.chroma)
 
-        self.assertTrue(self.dataset.add_users([user_dict]))
+        self.test_dataset.user_pool.add_uids([self.test_username])
+        self.test_dataset.write_current_user_pool()
+
+        print(self.test_dataset.user_pool.fetch_all_user_objects(loader))
+
 
     """
         Test inserting a post to the dataset.
@@ -289,7 +306,18 @@ class CrudTests(unittest.TestCase):
             "score": 123
         }
 
-        self.assertTrue(self.dataset.add_root_posts([post_dict], update_author_profile=True))
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_att_dict=True, att_dict=post_dict), derived=HN_entities.HNSubmissionLoader(user_factory, embeddings=True))
+
+        post = self.test_dataset.entity_factory("root", self.insertion_num, loader)
+        post.pupdate_in_sqlite(self.test_dataset.sqlite)
+        post.pupdate_in_chroma(self.test_dataset.chroma)
+        self.test_dataset.sf.add_root(self.insertion_num)
+        self.test_dataset.write_current_sf()
+
+
     
     """
         Test inserting a comment to a root post.
@@ -300,11 +328,21 @@ class CrudTests(unittest.TestCase):
             "by": self.test_username,
             "id": self.insertion_num + 1,
             "time": int(time.time()),
-            "text": "test text",
-            "parent": self.insertion_num
+            "text": "test text"
         }
 
-        self.assertTrue(self.dataset.add_leaf_comments([comment_dict], update_author_profile=True))
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_att_dict=True, att_dict=comment_dict), derived=HN_entities.HNSubmissionLoader(user_factory, embeddings=True))
+
+        comment = self.test_dataset.entity_factory("branch", self.insertion_num + 1, loader)
+        comment.pupdate_in_sqlite(self.test_dataset.sqlite)
+        comment.pupdate_in_chroma(self.test_dataset.chroma)
+        parent_node = self.test_dataset.sf.get_submission(self.insertion_num)
+        parent_node.add_kid(self.insertion_num + 1)
+        self.test_dataset.write_current_sf()
+
         
     """
         Test inserting a comment under an existing comment.
@@ -314,51 +352,84 @@ class CrudTests(unittest.TestCase):
             "by": self.test_username,
             "id": self.insertion_num + 2,
             "time": int(time.time()),
-            "text": "test text",
-            "parent": self.insertion_num + 1
+            "text": "test text"
         }
 
-        self.assertTrue(self.dataset.add_leaf_comments([comment_dict], update_author_profile=True))
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_att_dict=True, att_dict=comment_dict), derived=HN_entities.HNSubmissionLoader(user_factory, embeddings=True))
+
+        comment = self.test_dataset.entity_factory("branch", self.insertion_num + 2, loader)
+        comment.pupdate_in_sqlite(self.test_dataset.sqlite)
+        comment.pupdate_in_chroma(self.test_dataset.chroma)
+        parent_node = self.test_dataset.sf.get_submission(self.insertion_num + 1)
+        parent_node.add_kid(self.insertion_num + 2)
+        self.test_dataset.write_current_sf()
 
     """
         Test removing a user from the dataset.
     """
     def test_user_removal(self):
-        self.assertTrue(self.dataset.remove_users([self.test_username]))
+        sub_loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True))
+        post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True, embeddings=True), derived=HN_entities.HNUserLoader(post_factory, comment_factory))
+        
+        new_user = self.test_dataset.entity_factory("user", self.test_username, loader)
+        new_user.delete_from_sqlite(self.test_dataset.sqlite)
+        new_user.delete_from_chroma(self.test_dataset.chroma)
+        self.test_dataset.user_pool.remove_uids([self.test_username])
+        self.test_dataset.write_current_user_pool()
+
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True, embeddings=False), derived=HN_entities.HNUserLoader(post_factory, comment_factory))
+        print(self.test_dataset.user_pool.fetch_all_user_objects(loader))
+
 
     """
         Test removing a post from the dataset.
     """
     def test_post_removal(self):
-        post_to_remove = self.insertion_num
-        self.assertTrue(self.dataset.remove_root_posts([post_to_remove]))
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True, embeddings=True), derived=HN_entities.HNSubmissionLoader(user_factory, embeddings=True))
+
+        post = self.test_dataset.entity_factory("root", self.insertion_num, loader)
+        
+        post.delete_from_sqlite(self.test_dataset.sqlite)
+        post.delete_from_chroma(self.test_dataset.chroma)
+        self.test_dataset.sf.remove_root(self.insertion_num)
+        self.test_dataset.write_current_sf()
 
     """
         Test removing a comment from the dataset.
     """
-    def test_comment_removal(self):
-        comment_to_remove = self.insertion_num + 1
-        self.assertTrue(self.dataset.remove_comments([comment_to_remove]))
+    def test_comment_removal_from_leaf(self):
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
 
-    """
-        Test removing a user from the dataset, and also removing all of their submissions.
-    """
-    def test_full_user_removal(self):
-        self.assertTrue(self.dataset.remove_users([self.test_username], remove_posts=True, remove_comments=True))
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True, embeddings=True), derived=HN_entities.HNSubmissionLoader(user_factory, embeddings=True))
 
-    """
-        Test removing a post from the dataset, and also removing it from its author's profile.
-    """
-    def test_full_post_removal(self):
-        post_to_remove = self.insertion_num
-        self.assertTrue(self.dataset.remove_root_posts([post_to_remove], update_author_profile=True))
+        comment = self.test_dataset.entity_factory("branch", self.insertion_num + 2, loader)
         
-    """
-        Test removing a comment from the dataset, and also removing it from its author's profile.
-    """
-    def test_full_comment_removal(self):
-        comment_to_remove = self.insertion_num + 1
-        self.assertTrue(self.dataset.remove_comments([comment_to_remove], update_author_profile=True))
+        comment.delete_from_sqlite(self.test_dataset.sqlite)
+        comment.delete_from_chroma(self.test_dataset.chroma)
+        self.test_dataset.sf.remove_submission(self.insertion_num + 2)
+        self.test_dataset.write_current_sf()
+
+    def test_comment_removal_from_root(self):
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+
+        loader = entities.EntityLoader(base=entities.BaseLoader(from_sqlite=True, embeddings=True), derived=HN_entities.HNSubmissionLoader(user_factory, embeddings=True))
+
+        comment = self.test_dataset.entity_factory("branch", self.insertion_num + 1, loader)
+        
+        comment.delete_from_sqlite(self.test_dataset.sqlite)
+        comment.delete_from_chroma(self.test_dataset.chroma)
+        self.test_dataset.sf.remove_submission(self.insertion_num + 1)
+        self.test_dataset.write_current_sf()
 
     """
         Run all of the insertion tests in the necessary order.
@@ -373,9 +444,10 @@ class CrudTests(unittest.TestCase):
         Run the standard removal tests in the best order.
     """
     def test_removal(self):
-        self.test_full_comment_removal()
-        self.test_full_post_removal()
-        self.test_full_user_removal()
+        self.test_comment_removal_from_leaf()
+        self.test_comment_removal_from_root()
+        self.test_post_removal()
+        self.test_user_removal()
     
     """
         Run a full test of all CRUD capabilities.

@@ -112,8 +112,9 @@ class SqliteDB:
                 column = columns[num_base_atts + gen_att_index]
                 att_model = generated_att_models[gen_att_index]
                 check_column(num_base_atts + gen_att_index, column, att_model, entity_model['table_name'])
+                gen_att_index += 1
 
-            remaining_gen_atts = generated_att_models[num_base_atts:]
+            remaining_gen_atts = generated_att_models[gen_att_index:]
 
             self.add_cols(entity_model['table_name'], remaining_gen_atts)
 
@@ -191,6 +192,11 @@ class SqliteDB:
     """
     @_with_db
     def update(self, entity_model, where_dict, update_dict):
+        all_atts = sorted(entity_model['attributes']['base'] + entity_model['attributes']['generated'], key=lambda a: a['sqlite_order'])
+        updating_atts = [att for att in all_atts if att['name'] in update_dict]
+        for att in updating_atts:
+            update_dict[att['name']] = self.get_conversion(att['conversions']['store'])(update_dict[att['name']])
+
         update_str = ", ".join([f"{att} = ?" for att in list(update_dict.keys())])
         where_str = ", ".join([f"{att} = ?" for att in list(where_dict.keys())])
         
@@ -200,7 +206,7 @@ class SqliteDB:
             WHERE {where_str}
         """
 
-        self.cursor.execute(update_query, tuple(update_dict.values(), where_dict.values()))
+        self.cursor.execute(update_query, (list(update_dict.values()) + list(where_dict.values())))
 
         self.conn.commit()
 

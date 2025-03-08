@@ -17,6 +17,15 @@ class ChromaError(Exception):
     def __init__(self, message):
         super().__init__(message)
 
+class EmbeddingsNotFoundError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+class GenerateNullEmbeddingsError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
+
 """
     A class used to create the object with which the dataset
     will interact with Chroma
@@ -65,13 +74,14 @@ class ChromaDB:
     """
     def generate(self, entity_model, att_model, id_list, value_list, update=False):
 
+        
         if att_model['is_list']:
             list_val_dicts = utils.flatten_array([[
                 {
                     "doc": val,
                     "metadata": {"id_val": id_val},
                     "id": str(uuid.uuid4())
-                } for vals in list_val if val != ""] for id_val, list_val in list(zip(id_list, value_list))])
+                } for vals in list_val] for id_val, list_val in list(zip(id_list, value_list))])
             documents = [d["doc"] for d in list_val_dicts]
             ids = [d["id"] for d in list_val_dicts]
             metadatas = [d["metadata"] for d in list_val_dicts]
@@ -85,10 +95,13 @@ class ChromaDB:
         if metadatas != None:
             if len(metadatas) != len(ids):
                 raise ChromaError("Error creating embeddings: provided list of metadata differs in length from documents and ids.")
-
         if len(documents) == 0:
-            print(f"Attempted to create embeddings for {att_model['name']} for ids {ids} with empty list of documents. Returning...")
-            return
+            raise GenerateNullEmbeddingsError(f"Attempted to create embeddings for {att_model['name']} for ids {ids} with empty list of documents.")
+        for doc in documents:
+            if doc == None:
+                raise GenerateNullEmbeddingsError(f"Error: attempted to generate embeddings for unfilled attribute for {att_model['name']} for ids {ids}.")
+
+        documents = [("EMPTY" if doc == "" else doc) for doc in documents]
 
         for i in range(len(documents)):
             if self.tokenizer(documents[i]) > self._embedding_model_max_tokens:
@@ -108,16 +121,25 @@ class ChromaDB:
     """
         Retrieve embeddings for a given id list
     """
-    def retrieve(self, entity_model, att_model, id_list):
+    def retrieve(self, entity_model, att_model, id_val):
 
         collection = self.get_collection(entity_model, att_model['name'])
 
-        ids = None if att_model['is_list'] else [str(id_val) for id_val in id_list]
+        ids = None if att_model['is_list'] else [str(id_val)]
         where = {"id_val": str(id_val)} if att_model['is_list'] else None
 
-        embeddings = collection.get(ids=ids, where=where, include=["embeddings"])
+        result = collection.get(ids=ids, where=where, include=["documents", "embeddings"])
 
-        return embeddings["embeddings"]  
+        values = ["" if doc == "EMPTY" else doc for doc in result['documents']]
+
+        if len(result['embeddings']) == 0:
+            raise EmbeddingsNotFoundError(f"Error: embeddings for attribute {att_model['name']} of {entity_model['table_name']} with id {id_val} not found.")
+        
+        if att_model["is_list"]:
+            return [{'embeddings': result['embeddings'][i], 'value': values[i]} for i in range(len(result['embeddings']))]
+        else:
+            return {'embeddings': result['embeddings'][0], 'value': values[0]}
+
 
     def delete(self, entity_model, att_model, id_list):
         collection = self.get_collection(entity_model, att_model['name'])

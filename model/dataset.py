@@ -63,14 +63,14 @@ class Dataset:
         if has_sf:
             self.sf = submission_forest.SubmissionForest(self.name, utils.read_json(self.sf_path), self.entity_factory, self.sqlite, self.chroma, verbose=self.verbose)
         else:
-            self.sf = submission_forest.SubmissionForest(self.name, [], self.entity_factory, verbose=self.verbose)
+            self.sf = submission_forest.SubmissionForest(self.name, [], self.entity_factory, self.sqlite, self.chroma, verbose=self.verbose)
             self.write_current_sf()
 
         has_user_pool = utils.check_file_exists(self.user_pool_path)
         if has_user_pool:
             self.user_pool = user_pool.UserPool(self.name, utils.read_json(self.user_pool_path), self.entity_factory, self.sqlite, self.chroma, verbose=self.verbose)
         else:
-            self.user_pool = user_pool.UserPool(self.name, [], self.entity_factory, verbose=self.verbose)
+            self.user_pool = user_pool.UserPool(self.name, [], self.entity_factory, self.sqlite, self.chroma, verbose=self.verbose)
             self.write_current_user_pool()
 
 

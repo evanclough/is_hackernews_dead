@@ -115,19 +115,34 @@
                     "name": "test_gen_att1",
                     "sqlite_type": "TEXT",
                     "sqlite_order": 9,
-                    "embed": false
+                    "embed": false,
+                    "is_list": false,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    }
                 },
                 {
                     "name": "test_gen_att2",
                     "sqlite_type": "TEXT",
                     "sqlite_order": 8,
-                    "embed": true
+                    "embed": true,
+                    "is_list": false,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    }
                 },
                 {
                     "name": "test_gen_att3",
                     "sqlite_type": "TEXT",
                     "sqlite_order": 10,
-                    "embed": true
+                    "embed": true,
+                    "is_list": false,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    }
                 }
             ]
         }
