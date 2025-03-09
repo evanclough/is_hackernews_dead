@@ -127,12 +127,12 @@ class HNUser(entities.User):
         "posts": {
             "load": lambda s, c: 0,
             "pupdate": lambda s, c: HNUser.embed_submission_history(s, "posts", c),
-            "delete": lambda s, c: HNUser.delete_sub_his_embeddings(s, "posts", c)
+            "delete": lambda s, c: 0
         },
         "comments": {
             "load": lambda s, c: 0,
             "pupdate": lambda s, c: HNUser.embed_submission_history(s, "comments", c),
-            "delete": lambda s, c: HNUser.delete_sub_his_embeddings(s, "comments", c)
+            "delete": lambda s, c: 0
         },
         "favorite_posts": {
             "load": lambda s, c: 0,
@@ -156,7 +156,7 @@ class HNSubmission(entities.Submission):
         self.atts['author'].pupdate_in_chroma(chroma)
 
     def delete_author_embeddings(self, chroma):
-        return True
+        self.atts['author'].delete_from_chroma(chroma)
 
     def load_derived_atts(self, sqlite, user_factory=None, load_author_submission_history=False):
         self._print(f"Loading author of {self}...")
@@ -207,13 +207,12 @@ class HNSubmission(entities.Submission):
     custom_embedding_functions = {
         "author": {
             "load": lambda s, c: 0,
-            "pupdate": lambda s, c: HNSubmission.embed_author(s, c),
-            "delete": lambda s, c: HNSubmission.delete_author_embeddings(s, c)
+            "pupdate": lambda s, c: 0,
+            "delete": lambda s, c: 0
         }
     }
 
-    def pupdate_in_sqlite(self, sqlite, sub_type):
-        super().pupdate_in_sqlite(sqlite)
+    def add_to_author_history(self, sqlite, sub_type):
 
         if self.atts['author'] == None:
             raise HNSubmissionStoreError(f"Error: attempted to update {self} in sqlite, but author is not loaded.")
@@ -224,9 +223,8 @@ class HNSubmission(entities.Submission):
             self.atts['author'].set_att(id_col, [*author_ids, self.id])
             self.atts['author'].pupdate_in_sqlite(sqlite)
 
-    def delete_from_sqlite(self, sqlite, sub_type):
-        super().delete_from_sqlite(sqlite)
-        
+    def remove_from_author_history(self, sqlite, sub_type):
+
         if self.atts['author'] == None:
             raise HNSubmissionStoreError(f"Error: attempted to remove {self} from sqlite, but author is not loaded.")
 
@@ -238,11 +236,11 @@ class HNSubmission(entities.Submission):
 
 class HNPost(HNSubmission, entities.Root):
 
-    def pupdate_in_sqlite(self, sqlite):
-        HNSubmission.pupdate_in_sqlite(self, sqlite, "post")
+    def add_to_author_history(self, sqlite):
+        HNSubmission.add_to_author_history(self, sqlite, "post")
 
-    def delete_from_sqlite(self, sqlite):
-        HNSubmission.delete_from_sqlite(self, sqlite, "post")
+    def remove_from_author_history(self, sqlite):
+        HNSubmission.remove_from_author_history(self, sqlite, "post")
 
     def get_prompt_str(self):
         return "POST: " + self.get_att("text")
@@ -250,12 +248,11 @@ class HNPost(HNSubmission, entities.Root):
 
 class HNComment(HNSubmission, entities.Branch):
 
-    def pupdate_in_sqlite(self, sqlite):
-        HNSubmission.pupdate_in_sqlite(self, sqlite, "comment")
-
+    def add_to_author_history(self, sqlite):
+        HNSubmission.add_to_author_history(self, sqlite, "comment")
     
-    def delete_from_sqlite(self, sqlite):
-        HNSubmission.delete_from_sqlite(self, sqlite, "comment")
+    def remove_from_author_history(self, sqlite):
+        HNSubmission.remove_from_author_history(self, sqlite, "comment")
 
     def get_prompt_str(self):
         return "COMMENT: " + self.get_att("text")

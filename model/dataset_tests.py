@@ -313,6 +313,7 @@ class CrudTests(unittest.TestCase):
 
         post = self.test_dataset.entity_factory("root", self.insertion_num, loader)
         post.pupdate_in_sqlite(self.test_dataset.sqlite)
+        post.add_to_author_history(self.test_dataset.sqlite)
         post.pupdate_in_chroma(self.test_dataset.chroma)
         self.test_dataset.sf.add_root(self.insertion_num)
         self.test_dataset.write_current_sf()
@@ -338,6 +339,7 @@ class CrudTests(unittest.TestCase):
 
         comment = self.test_dataset.entity_factory("branch", self.insertion_num + 1, loader)
         comment.pupdate_in_sqlite(self.test_dataset.sqlite)
+        comment.add_to_author_history(self.test_dataset.sqlite)
         comment.pupdate_in_chroma(self.test_dataset.chroma)
         parent_node = self.test_dataset.sf.get_submission(self.insertion_num)
         parent_node.add_kid(self.insertion_num + 1)
@@ -362,6 +364,7 @@ class CrudTests(unittest.TestCase):
 
         comment = self.test_dataset.entity_factory("branch", self.insertion_num + 2, loader)
         comment.pupdate_in_sqlite(self.test_dataset.sqlite)
+        comment.add_to_author_history(self.test_dataset.sqlite)
         comment.pupdate_in_chroma(self.test_dataset.chroma)
         parent_node = self.test_dataset.sf.get_submission(self.insertion_num + 1)
         parent_node.add_kid(self.insertion_num + 2)
@@ -398,6 +401,9 @@ class CrudTests(unittest.TestCase):
         post = self.test_dataset.entity_factory("root", self.insertion_num, loader)
         
         post.delete_from_sqlite(self.test_dataset.sqlite)
+        post.remove_from_author_history(self.test_dataset.sqlite)
+
+
         post.delete_from_chroma(self.test_dataset.chroma)
         self.test_dataset.sf.remove_root(self.insertion_num)
         self.test_dataset.write_current_sf()
@@ -414,6 +420,8 @@ class CrudTests(unittest.TestCase):
         comment = self.test_dataset.entity_factory("branch", self.insertion_num + 2, loader)
         
         comment.delete_from_sqlite(self.test_dataset.sqlite)
+        comment.remove_from_author_history(self.test_dataset.sqlite)
+
         comment.delete_from_chroma(self.test_dataset.chroma)
         self.test_dataset.sf.remove_submission(self.insertion_num + 2)
         self.test_dataset.write_current_sf()
@@ -427,6 +435,8 @@ class CrudTests(unittest.TestCase):
         comment = self.test_dataset.entity_factory("branch", self.insertion_num + 1, loader)
         
         comment.delete_from_sqlite(self.test_dataset.sqlite)
+        comment.remove_from_author_history(self.test_dataset.sqlite)
+
         comment.delete_from_chroma(self.test_dataset.chroma)
         self.test_dataset.sf.remove_submission(self.insertion_num + 1)
         self.test_dataset.write_current_sf()
@@ -469,6 +479,7 @@ class GenTests(unittest.TestCase):
         cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes, verbose=True)
         cls.insertion_num = 55555
         cls.test_username = f"test_username{cls.insertion_num}"
+        cls.post_test_num = 41848209
 
         print(f"Running sqlite tests on existing dataset {cls.test_dataset_name}...")
         print(f"test insertion number: {cls.insertion_num}")
@@ -505,6 +516,27 @@ class GenTests(unittest.TestCase):
         self.test_dataset.embedding_model.estimate_doc_cost("TEST581985715981752", accrue=True)
 
         self.test_dataset.embedding_model.print_accrued_costs()
+
+    def test_url_content_summarization(self):
+        user_loader = entities.EntityLoader(base = entities.BaseLoader(from_sqlite=True))
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+        base_loader = entities.BaseLoader(from_sqlite=True)
+
+
+        loader = entities.EntityLoader(base=base_loader)
+
+        post = self.test_dataset.entity_factory("root", self.post_test_num, loader)
+
+        post.generate_attribute("url_content_summary", self.test_dataset.llm)
+
+        post.pupdate_in_sqlite(self.test_dataset.sqlite)
+        post.pupdate_in_chroma(self.test_dataset.chroma)
+
+        loader = entities.EntityLoader(base=base_loader, generated=base_loader)
+        post = self.test_dataset.entity_factory("root", self.post_test_num, loader)
+        print(post.get_att("url_content_summary"))
+
+
         
         
 

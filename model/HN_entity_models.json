@@ -110,44 +110,7 @@
                     "is_list": true
                 }
             ],
-            "generated": [
-                {
-                    "name": "test_gen_att1",
-                    "sqlite_type": "TEXT",
-                    "sqlite_order": 9,
-                    "embed": false,
-                    "is_list": false,
-                    "conversions": {
-                        "load": "none",
-                        "store": "none"
-                    },
-                    "prompt_template": "{% for comment in comments %} {{ comment.get_prompt_str() }} {% endfor %}"
-                },
-                {
-                    "name": "test_gen_att2",
-                    "sqlite_type": "TEXT",
-                    "sqlite_order": 8,
-                    "embed": true,
-                    "is_list": false,
-                    "conversions": {
-                        "load": "none",
-                        "store": "none"
-                    },
-                    "prompt_template": "{% for post in posts %} {{ post.get_prompt_str() }} {% endfor %}"
-                },
-                {
-                    "name": "test_gen_att3",
-                    "sqlite_type": "TEXT",
-                    "sqlite_order": 10,
-                    "embed": true,
-                    "is_list": false,
-                    "conversions": {
-                        "load": "none",
-                        "store": "none"
-                    },
-                    "prompt_template": "draw me an ascii smiley face please"
-                }
-            ]
+            "generated": []
         }
     },
     "root": {
@@ -253,7 +216,20 @@
                     "is_list": false
                 }
             ],
-            "generated": []
+            "generated": [
+                {
+                    "name": "url_content_summary",
+                    "sqlite_type": "TEXT",
+                    "sqlite_order": 8,
+                    "embed": true,
+                    "is_list": false,
+                    "conversions": {
+                        "load": "none",
+                        "store": "none"
+                    },
+                    "prompt_template": "This is the body of an HTML web page. {{url_content}} Can you please give a summary of its contents in 500 characters or less?"
+                }
+            ]
         }
     },
     "branch": {

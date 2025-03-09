@@ -52,6 +52,11 @@ class LLM:
     def __str__(self):
         return f"LLM {self.name}"
 
+    def check_prompt(self, prompt):
+        prompt_tokens = self.tokenize(prompt)
+        if prompt_tokens > self.context_window:
+            raise LLMError(f"Error: prompt with {prompt_tokens} tokens exceeds {self}'s context window of {self.context_window} tokens.")
+
     def get_accrued_cost(self):
         accrued_cost = 0
 
@@ -85,6 +90,8 @@ class OpenAILLM(LLM):
         return len(tokens)
 
     def complete(self, prompt):
+        self.check_prompt(prompt)
+
         completion = self.client.chat.completions.create(
             model=self.model_name,
             messages=[

@@ -79,8 +79,8 @@ class ChromaDB:
             ids = [d["id"] for d in list_val_dicts]
             metadatas = [d["metadata"] for d in list_val_dicts]
         else:
-            documents = [val for val in value_list if val != ""]
-            ids = [str(id_val) for index, id_val in enumerate(id_list) if value_list[index] != ""]
+            documents = [val for val in value_list]
+            ids = [str(id_val) for id_val in id_list]
             metadatas = None
 
         if len(documents) != len(ids):
@@ -103,6 +103,10 @@ class ChromaDB:
         collection = self.get_collection(entity_model, att_model['name'])
 
         operation = collection.update if update else collection.add
+
+        print("ADDING:")
+        print(att_model['name'], documents, ids)
+        print("\n\n\n\n\n")
 
         operation(documents=documents, ids=ids, metadatas=metadatas)
 
@@ -131,6 +135,10 @@ class ChromaDB:
 
     def delete(self, entity_model, att_model, id_list):
         collection = self.get_collection(entity_model, att_model['name'])
+
+        print("REMOVING:")
+        print(att_model['name'], id_list)
+        print("\n\n\n\n\n")
 
         if att_model['is_list']:
             for id_val in id_list:
