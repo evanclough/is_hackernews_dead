@@ -6,6 +6,7 @@ import utils
 from jinja2 import Template
 from sqlite_db import UniqueDBItemNotFound
 from chroma_db import EmbeddingsNotFoundError
+import numpy as np
 
 class LoaderError(Exception):
     def __init__(self, message):
@@ -13,89 +14,80 @@ class LoaderError(Exception):
 
 
 class AttClassLoader:
-    def __init__(self, name, embeddings=False):
+    def __init__(self, att_class, embeddings=False):
         self.embeddings = embeddings
-        self.needs_chroma = embeddings
-        self.needs_sqlite = False
-        self.name = name
+        self.att_class = att_class
 
-    def check_sources(self):
-        return True
 
-class BaseLoader(AttClassLoader):
-    def __init__(self, from_sqlite=False, from_att_dict=False, att_dict=None, **kwargs):
-        if from_sqlite and from_att_dict:
-            raise LoaderError(f"Error: cannot load in base attributes from both sqlite and an att dict.")
+    def load(self, entity):
+        if self.embeddings:
+            entity.load_from_chroma(self.att_class)
 
-        self.from_sqlite = from_sqlite
-        self.needs_sqlite = from_sqlite
+class SqliteLoader(AttClassLoader):
+    def load(self, entity):
+        super().load(entity)
+        entity.load_from_sqlite(self.att_class)
 
-        self.from_att_dict = from_att_dict
+class DictLoader(AttClassLoader):
+    def __init__(self, att_class, att_dict, embeddings=False):
+        super().__init__(att_class, embeddings=embeddings)
         self.att_dict = att_dict
 
-        super().__init__("base", **kwargs)
-
-    def check_sources(self):
-        if self.from_att_dict and self.att_dict == None:
-            raise LoaderError(f"Error: loader requires att dict, but att dict was not supplied.")
+    def load(self, entity):
+        entity.load_from_att_dict(self.att_class, self.att_dict)
+        super().load(entity)
 
 class DerivedLoader(AttClassLoader):
-    def __init__(self, **kwargs):
-        self.needs_sqlite = True
-        self.params = {}
-        super().__init__("derived", **kwargs)
+    def __init__(self, embeddings=False):
+        self.att_params = {}
+        self.embedding_params={}
+        super().__init__("derived", embeddings=embeddings)
+
+    def load(self, entity):
+        entity.load_derived_atts(**self.att_params)
+        if self.embeddings:
+            entity.load_derived_embeddings(**self.embedding_params)
+
+class MergedLoader(AttClassLoader):
+    def __init__(self, mergee=None, embeddings=False):
+        super().__init__("merged", embeddings=embeddings)
+        self.mergee = mergee
+
+    def load(self, entity):
+        entity.load_merged(self.mergee)
+        super().load(entity)
 
 class EntityLoader:
-    def __init__(self, base=None, derived=None, generated=None):
-        self.sqlite = None
-        self.chroma = None
-        self.needs_sqlite = False
-        self.needs_chroma = False
-
+    def __init__(self, base=None, derived=None, generated=None, merged=None):
         self.base = base
         self.derived = derived
         self.generated = generated
-        self.att_classes = [self.base, self.derived, self.generated]
+        self.merged = merged
 
-        for att_class in self.att_classes:
+    def set_base(self, base):
+        self.base = base
+    def set_derived(self, derived):
+        self.derived = derived
+    def set_generated(self, generated):
+        self.generated = generated
+    def set_merged(self, merged):
+        self.merged = merged
+
+    def load(self, entity):
+        att_classes = [self.base, self.derived, self.generated, self.merged]
+        for att_class in att_classes:
             if att_class != None:
-                self.needs_sqlite = self.needs_sqlite or att_class.needs_sqlite
-                self.needs_chroma = self.needs_chroma or att_class.needs_chroma
-
-    def check_sources(self):
-        for att_class in self.att_classes:
-            if att_class != None:
-                att_class.check_sources()
-        if self.needs_chroma and self.chroma == None:
-            raise LoaderError(f"Error: loader requires chroma, but chroma object was not populated.")
-        if self.needs_sqlite and self.sqlite == None:
-            raise LoaderError(f"Error: loader requires sqlite, but sqlite object was not populated.")
-
+                att_class.load(entity)
 
 
 class Entity:
 
-    def __init__(self, entity_model, id_val, loader, verbose=False):
+    def __init__(self, entity_model, id_val, loader, sqlite, chroma, verbose=False):
         self.entity_model = entity_model
         self.id = id_val
-        
-        self.status = {
-            "base": {
-                "values": False,
-                "embeddings": False,
-                "checker": self.check_base_atts
-            },
-            "derived": {
-                "values": False,
-                "embeddings": False,
-                "checker": self.check_derived_atts
-            },
-            "generated": {
-                "values": False,
-                "embeddings": False,
-                "checker": self.check_generated_atts
-            }
-        }
+
+        self.sqlite = sqlite
+        self.chroma = chroma
 
         self.verbose = verbose
 
@@ -108,44 +100,16 @@ class Entity:
                     self.embeddings[att['name']] = None 
                 self.atts[att["name"]] = None
         
-        
         self._print(f"Initialzing {self}...")
 
-        loader.check_sources()
-
-        if loader.base != None:
-            if loader.base.from_sqlite:
-                self._load_from_sqlite('base', loader.sqlite)
-                self.status['base']['values'] = True
-            if loader.base.from_att_dict:
-                self._load_from_att_dict('base', loader.base.att_dict)
-                self.status['base']['values'] = True
-
-        if loader.derived != None:
-            self.load_derived_atts(loader.sqlite, **loader.derived.params)
-            self.status['derived']['values'] = True
-
-        if loader.generated != None:
-            if loader.generated.from_sqlite:
-                self._load_from_sqlite('generated', loader.sqlite)
-                self.status['generated']['values'] = True
-            if loader.generated.from_att_dict:
-                self._load_from_att_dict('base', loader.generated.att_dict)
-                self.status['generated']['values'] = True
-
-        for att_class in loader.att_classes:
-            if att_class != None:
-                if att_class.embeddings:
-                    self._load_from_chroma(att_class.name, loader.chroma)
-                    self.status[att_class.name]['embeddings'] = True
+        loader.load(self)
 
         self._print(f"Successfully initialized {self}.")
 
     def get_id(self):
         return self.id
 
-
-    def _load_from_att_dict(self, att_class, att_dict):
+    def load_from_att_dict(self, att_class, att_dict):
         self._print(f"Manually populating base attributes from given dict for {self}...")
         for att in self.entity_model['attributes'][att_class]:
             if att['name'] in att_dict:
@@ -155,10 +119,9 @@ class Entity:
     
         self._print(f"Successfully populated base attributes from given dict for {self}.")
 
-
-    def _load_from_sqlite(self, att_class, sqlite):
+    def load_from_sqlite(self, att_class):
         self._print(f"Loading attributes from sqlite for {self}...")
-        sqlite_result = sqlite.get_by_id(self.entity_model, self.id)
+        sqlite_result = self.sqlite.get_by_id(self.entity_model, self.id)
 
         for att in self.entity_model['attributes'][att_class]:
             if att['name'] in sqlite_result:
@@ -168,10 +131,39 @@ class Entity:
 
         self._print(f"Successfully loaded attributes from sqlite for {self}.")
 
-    def pupdate_in_sqlite(self, sqlite):
+    def merge_text(self, mergee, att_model):
+        if mergee == None:
+            root_template = Template(att_model['root_template'])
+            result = root_template.render(**self.atts)
+        else:
+            merge_template = Template(att_model['merge_template'])
+            mergee_atts = {"mergee_" + key: value for key, value in mergee.get_att_dict().items()}
+            my_atts = {"my_" + key: value for key, value in self.get_att_dict().items()}
+            result = merge_template.render(**my_atts, **mergee_atts)
+
+        return result
+
+    def merge_list(self, mergee, att_model):
+        if mergee == None:
+            result = [self.atts[att_model['att']]]
+        else:
+            result = [*mergee.get_att(att_model['name']), self.atts[att_model['att']]]
+
+        return result
+
+    def load_merged(self, mergee):
+        merge_functions = {
+            "text": self.merge_text,
+            "list": self.merge_list
+        }
+
+        for att_model in self.entity_model['attributes']['merged']:
+            self.atts[att_model['name']] = merge_functions[att_model['merge_function']](mergee, att_model)
+
+    def pupdate_in_sqlite(self):
         try:
             self._print(f"Updating {self} in sqlite...")
-            current_sqlite_row = sqlite.get_by_id(self.entity_model, self.id)
+            current_sqlite_row = self.sqlite.get_by_id(self.entity_model, self.id)
             sqlite_atts = self.entity_model['attributes']['base'] + self.entity_model['attributes']['generated']
 
             update_dict = {}
@@ -181,64 +173,52 @@ class Entity:
                     self._print(f"Updating {att_name} from {sqlite_val} to {self.atts[att_name]}")
                     update_dict[att_name] = self.atts[att_name]
 
-            sqlite.update_by_id(self.entity_model, self.id, update_dict)
+            self.sqlite.update_by_id(self.entity_model, self.id, update_dict)
 
             self._print(f"Successfully updated {self} in sqlite.")
         except UniqueDBItemNotFound as e:
             self._print(f"Inserting {self} into sqlite...")
-            sqlite.insert(self.entity_model, [self.atts])
+            self.sqlite.insert(self.entity_model, [self.atts])
             self._print(f"Successfully inserted {self} into sqlite.")
 
-    def delete_from_sqlite(self, sqlite):
+    def delete_from_sqlite(self):
         self._print(f"Deleting {self} from sqlite...")
 
-        sqlite.delete_by_id_list(self.entity_model, [self.id])
+        self.sqlite.delete_by_id_list(self.entity_model, [self.id])
 
         self._print(f"Successfully deleted {self} from sqlite.")
 
-    def _load_from_chroma(self, att_class, chroma):
+    def load_from_chroma(self, att_class):
         for att_model in self.entity_model['attributes'][att_class]:
             if att_model['embed']:
-                if att_model['name'] in self.custom_embedding_functions:
-                    self.custom_embedding_functions[att_model['name']]['load'](self, chroma)
-                else:
-                    embeddings = chroma.retrieve(self.entity_model, att_model, self.id)
-                    self.embeddings[att_model['name']] = embeddings['embeddings']
-
+                embeddings = self.chroma.retrieve(self.entity_model, att_model, self.id)
+                self.embeddings[att_model['name']] = embeddings['embeddings']
 
         self._print(f"Successfully loaded embeddings from chroma for {self}.")
 
-    def delete_from_chroma(self, chroma):
+    def delete_from_chroma(self):
         self._print(f"Deleting {self} from chroma... ")
 
         for att_class in self.entity_model['attributes'].values():
             for att_model in att_class:
                 if att_model['embed']:
-                    if att_model['name'] in self.custom_embedding_functions:
-                        self.custom_embedding_functions[att_model['name']]['delete'](self, chroma)
-                    else:
-                        chroma.delete(self.entity_model, att_model, [self.id])
+                    self.chroma.delete(self.entity_model, att_model, [self.id])
 
         self._print(f"Successfully deleted {self} from chroma.")
 
-    def pupdate_in_chroma(self, chroma):
+    def pupdate_in_chroma(self):
         self._print(f"Generating/updating embeddings for {self} and storing in chroma...")
         for att_class in self.entity_model['attributes'].values():
             for att_model in att_class:
                 if att_model['embed'] and self.atts[att_model['name']] != None:
-                    if att_model['name'] in self.custom_embedding_functions:
-                        self.custom_embedding_functions[att_model['name']]['pupdate'](self, chroma)
-                    else:
-                        try:
-                            current_embedded_val = chroma.retrieve(self.entity_model, att_model, self.id)['value']
-                            if self.atts[att_model['name']] != current_embedded_val:
-                                self._print(f"Updating embeddings for {att_model['name']}...")
-                                chroma.update(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
-                        except EmbeddingsNotFoundError as e:
-                            chroma.generate(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
+                    try:
+                        current_embedded_val = self.chroma.retrieve(self.entity_model, att_model, self.id)['value']
+                        if self.atts[att_model['name']] != current_embedded_val:
+                            self._print(f"Updating embeddings for {att_model['name']}...")
+                            self.chroma.update(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
+                    except EmbeddingsNotFoundError as e:
+                        self.chroma.generate(self.entity_model, att_model, [self.id], [self.atts[att_model['name']]])
         self._print(f"Successfully generated/updated embeddings for {self} and stored in chroma.")
-
-
 
     def generate_attribute(self, att, llm, additional_context={}):
         att_model = [gen_att for gen_att in self.entity_model['attributes']['generated'] if gen_att['name'] == att]
@@ -254,6 +234,17 @@ class Entity:
         result = llm.complete(prompt)
 
         self.set_att(att, result)
+
+    def get_numpy_array(self):
+        result = np.array([])
+        for att_class in self.entity_model['attributes'].values():
+            for att_model in att_class:
+                if att_model['include_when']:
+                    val = self.embeddings[att_model['name']] if att_model['embed'] else np.array([self.atts[att_model['name']]])
+                    print(att_model['name'], val)
+                    result = np.concatenate((result, val))
+
+        return result
         
 
     def set_verbose(self, verbose):
@@ -294,18 +285,6 @@ class Entity:
 
 
     def check(self, check_dict):
-
-        for att_class_name, att_class in check_dict.items():
-            if self.status[att_class_name]['values'] != att_class['values']:
-                self._print(f"{self} fails check, as {att_class_name} attributes do not have values populated.")
-                return False
-            if self.status[att_class_name]['embeddings'] != att_class['embeddings']:
-                self._print(f"{self} fails check, as {att_class_name} attributes do not have embeddings populated.")
-                return False
-            check_result = self.status[att_class_name]['checker'](**att_class['checker_params'])
-            if not check_result['success']:
-                self._print(f"{self} fails check, as {att_class_name} failed check method: {check_result['message']}")
-                return False
         
         self._print(f"{self} passes check.")
         return True

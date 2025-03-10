@@ -104,10 +104,6 @@ class ChromaDB:
 
         operation = collection.update if update else collection.add
 
-        print("ADDING:")
-        print(att_model['name'], documents, ids)
-        print("\n\n\n\n\n")
-
         operation(documents=documents, ids=ids, metadatas=metadatas)
 
     """
@@ -135,10 +131,6 @@ class ChromaDB:
 
     def delete(self, entity_model, att_model, id_list):
         collection = self.get_collection(entity_model, att_model['name'])
-
-        print("REMOVING:")
-        print(att_model['name'], id_list)
-        print("\n\n\n\n\n")
 
         if att_model['is_list']:
             for id_val in id_list:

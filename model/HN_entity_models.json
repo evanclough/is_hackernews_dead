@@ -13,7 +13,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": false
                 },
                 {
                     "name": "about",
@@ -24,7 +25,8 @@
                         "store": "none"
                     },
                     "embed": true,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": true
                 },
                 {
                     "name": "karma",
@@ -35,7 +37,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": true
                 },
                 {
                     "name": "created",
@@ -46,7 +49,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": true
                 },
                 {
                     "name": "user_class",
@@ -57,7 +61,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": false
                 },
                 {
                     "name": "post_ids",
@@ -68,7 +73,8 @@
                         "store": "json_dump"
                     },
                     "embed": false,
-                    "is_list": true
+                    "is_list": true,
+                    "include_when": false
                 },
                 {
                     "name": "comment_ids",
@@ -79,7 +85,8 @@
                         "store": "json_dump"
                     },
                     "embed": false,
-                    "is_list": true
+                    "is_list": true,
+                    "include_when": false
                 },
                 {
                     "name": "favorite_post_ids",
@@ -90,24 +97,28 @@
                         "store": "json_dump"
                     },
                     "embed": false,
-                    "is_list": true
+                    "is_list": true,
+                    "include_when": false
                 }
             ],
             "derived": [
                 {
                     "name": "comments",
-                    "embed": true,
-                    "is_list": true
+                    "embed": false,
+                    "is_list": true,
+                    "include_when": false
                 },
                 {
                     "name": "posts",
-                    "embed": true,
-                    "is_list": true
+                    "embed": false,
+                    "is_list": true,
+                    "include_when": false
                 },
                 {
                     "name": "favorite_posts",
-                    "embed": true,
-                    "is_list": true
+                    "embed": false,
+                    "is_list": true,
+                    "include_when": false
                 }
             ],
             "generated": []
@@ -127,7 +138,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": false
                 },
                 {
                     "name": "id",
@@ -138,7 +150,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": false
                 },
                 {
                     "name": "score",
@@ -150,7 +163,8 @@
                     },
                     "py_type": "int",
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": true
                 },
                 {
                     "name": "time",
@@ -161,7 +175,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": true
                 },
                 {
                     "name": "title",
@@ -173,7 +188,8 @@
                     },
                     "py_type": "str",
                     "embed": true,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": true
                 },
                 {
                     "name": "text",
@@ -184,7 +200,8 @@
                         "store": "none"
                     },
                     "embed": true,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": true
                 },
                 {
                     "name": "url",
@@ -195,7 +212,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": false
                 },
                 {
                     "name": "url_content",
@@ -205,15 +223,23 @@
                         "load": "none",
                         "store": "none"
                     },
-                    "embed": true,
-                    "is_list": false
+                    "embed": false,
+                    "is_list": false,
+                    "include_when": false
                 }
             ],
             "derived": [
                 {
                     "name": "author",
+                    "embed": false,
+                    "is_list": false,
+                    "include_when": false
+                },
+                {
+                    "name": "full_content",
                     "embed": true,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": true
                 }
             ],
             "generated": [
@@ -227,7 +253,8 @@
                         "load": "none",
                         "store": "none"
                     },
-                    "prompt_template": "This is the body of an HTML web page. {{url_content}} Can you please give a summary of its contents in 500 characters or less?"
+                    "prompt_template": "This is the body of an HTML web page. {{url_content}} Can you please give a summary of its contents in 500 characters or less?",
+                    "include_when": true
                 }
             ]
         }
@@ -246,7 +273,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": false
                 },
                 {
                     "name": "id",
@@ -257,7 +285,8 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": false
                 },
                 {
                     "name": "text",
@@ -267,8 +296,9 @@
                         "load": "none",
                         "store": "none"
                     },
-                    "embed": true,
-                    "is_list": false
+                    "embed": false,
+                    "is_list": false,
+                    "include_when": false
                 },
                 {
                     "name": "time",
@@ -279,17 +309,38 @@
                         "store": "none"
                     },
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": true
                 }
             ],
             "derived": [
                 {
                     "name": "author",
                     "embed": false,
-                    "is_list": false
+                    "is_list": false,
+                    "include_when": false
                 }
             ],
-            "generated": []
+            "generated": [],
+            "merged": [
+                {
+                    "name": "full_text_chain",
+                    "embed": true,
+                    "include_when": true,
+                    "is_list": false,
+                    "merge_function": "text", 
+                    "root_template": "",
+                    "merge_template": "{{mergee_full_text_chain}} ->\n\n {{mergee_text}}"
+                },
+                {
+                    "name": "participants",
+                    "embed": false,
+                    "include_when": false,
+                    "is_list": true,
+                    "merge_function": "list",
+                    "att": "by"
+                }
+            ]
         }
     }
 }

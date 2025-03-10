@@ -25,6 +25,7 @@ class EmbeddingModel:
         self.name = config['name']
         self.max_tokens = config["max_tokens"]
         self.input_token_cost = config["input_token_cost"]
+        self.dimension = config['dimension']
 
         self.accrued_input_tokens = 0
 
