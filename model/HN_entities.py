@@ -1,5 +1,6 @@
 import entities
 
+from chroma_db import EmbeddingsNotFoundError
 
 class HNUserLoadError(Exception):
     def __init__(self, message):
@@ -10,25 +11,60 @@ class HNUserStoreError(Exception):
         super().__init__(message)
 
 
-
-class HNSubmissionLoadError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-
-class HNSubmissionStoreError(Exception):
-    def __init__(self, message):
-        super().__init__(message)
-
-class HNUserLoader(entities.DerivedLoader):
-    def __init__(self, post_factory, comment_factory, skip_submission_errors=False, sub_att_classes=[], **kwargs):
-        super().__init__(**kwargs)
-
-        self.att_params['post_factory'] = post_factory
-        self.att_params['comment_factory'] = comment_factory
-        self.att_params['skip_submission_errors'] = skip_submission_errors
-        self.embedding_params['sub_att_classes'] = sub_att_classes
-
 class HNUser(entities.User):
+
+    model = entities.EntityModel(
+        "username",
+        "users",
+        entities.AttClassModel([
+            entities.SqliteAttModel("username", False, False, "str", "TEXT"),
+            entities.SqliteAttModel("about", True, True, "str", "TEXT"),
+            entities.SqliteAttModel("karma", False, True, "int", "INTEGER"),
+            entities.SqliteAttModel("created", False, True, "int", "INTEGER"),
+            entities.SqliteAttModel("user_class", False, False, "str", "TEXT"),
+            entities.SqliteAttModel("post_ids", False, False, "dict", "TEXT"),
+            entities.SqliteAttModel("comment_ids", False, False, "dict", "TEXT"),
+            entities.SqliteAttModel("favorite_post_ids", False, False, "dict", "TEXT")
+        ]),
+        entities.AttClassModel([
+            entities.DerivedAttModel("comments", False, False, "list(entity)", lambda a, b, c: a),
+            entities.DerivedAttModel("posts", False, False, "list(entity)", lambda a, b, c: a),
+            entities.DerivedAttModel("favorite_posts", False, False, "list(entity)", lambda a, b, c: a)
+        ]),
+        entities.AttClassModel([])
+    )
+
+    def load_submission_history(sub_type, base, derived, generated):
+        submission_types = {
+            "posts": {
+                "id_list": "post_ids",
+                "init_func": HNPost
+            },
+            "comments": {
+                "id_list": "comment_ids",
+                "init_func": HNComment
+            },
+            "favorite_posts": {
+                "id_list": "favorite_post_ids",
+                "init_func": HNPost
+            }
+        }
+        id_list = self.base.get_value(submission_types[sub_type]["id_list"])
+        submission_list = []
+        for id_val in id_list:
+            try:
+                submission = submission_types[sub_type]['init_func'](id_val, self.sqlite, self.chroma)
+                submission_list.append(submission)
+            except Exception as e:
+                    self._print(f"Error in retrieving {sub_type} {id_val} in submission history of {self}.")
+                    if skip_submission_errors:
+                        self._print("Skipping...")
+                        continue
+                    else:
+                        raise e
+        return submission_list
+
+    """
 
     def pupdate_in_chroma(self, embed_sub_his=False):
         super().pupdate_in_chroma()
@@ -46,9 +82,6 @@ class HNUser(entities.User):
                 for submission_object in self.atts[sub_type]:
                     submission_object.delete_from_chroma()
 
-    """
-        Store all of the user's submission items.
-    """
     def load_derived_atts(self, post_factory=None, comment_factory=None, skip_submission_errors=False):
         
         self._print(f"Loading submission history for {self}...")
@@ -94,20 +127,20 @@ class HNUser(entities.User):
             for submission in self.atts[sub_type]:
                 for att_class in sub_att_classes:
                     submission.load_from_chroma(att_class)
+    """
 
 
 class HNSubmissionLoader(entities.DerivedLoader):
-    def __init__(self, user_factory, load_author_submission_history=False, author_att_classes=[], **kwargs):
+    def __init__(self, user_factory=None, load_author_submission_history=False, author_att_classes=[], **kwargs):
         super().__init__(**kwargs)
 
         self.att_params['user_factory'] = user_factory
         self.att_params['load_author_submission_history'] = load_author_submission_history
         self.embedding_params['author_att_classes'] = author_att_classes
 
-### author related stuff is stubbed out while testing, the datasets aren't full
 class HNSubmission(entities.Submission):
 
-
+    """
     def pupdate_in_chroma(self, embed_author=False):
         super().pupdate_in_chroma()
         if embed_author:
@@ -121,16 +154,8 @@ class HNSubmission(entities.Submission):
     def load_derived_atts(self, user_factory=None, load_author_submission_history=False):
         self._print(f"Loading author of {self}...")
 
-        if user_factory == None:
-            raise HNSubmissionLoadError(f"Error: attempted to load author of {self}, but did not provide create user object method.")
-        
-        self.atts['full_text_content'] = f"TITLE: {self.atts['title']}" + "\n"
-        if self.atts['text'] != '':
-            self.atts['full_text_content'] += f"BODY TEXT: {self.atts['text']}" + "\n"
-        if self.atts['url_content'] != '':
-            self.atts['full_text_content'] += f"URL CONTENT SUMMARY: {self.atts['url_content_summary']}"
-
-        self.atts['author'] = user_factory(self.get_att("by"))
+        if user_factory != None:
+            self.atts['author'] = user_factory(self.get_att("by"))
         
         self._print(f"Successfully loaded author of {self}.")
 
@@ -164,23 +189,84 @@ class HNSubmission(entities.Submission):
         self.atts['author'].set_att(id_col, new_author_ids)
         self.atts['author'].pupdate_in_sqlite()
 
+    def get_time(self):
+        return self.get_att("time")
+    """
+
 class HNPost(HNSubmission, entities.Root):
 
+    model = entities.EntityModel(
+        "id",
+        "posts",
+        entities.AttClassModel([
+            entities.SqliteAttModel("by", False, False, "str", "TEXT"),
+            entities.SqliteAttModel("id", False, False, "int", "INTEGER"),
+            entities.SqliteAttModel("score", False, True, "int", "INTEGER"),
+            entities.SqliteAttModel("time", False, True, "int", "INTEGER"),
+            entities.SqliteAttModel("title", False, False, "str", "TEXT"),
+            entities.SqliteAttModel("text", False, False, "str", "TEXT"),
+            entities.SqliteAttModel("url", False, False, "str", "TEXT"),
+            entities.SqliteAttModel("url_content", False, False, "str", "TEXT"),
+        ]),
+        entities.AttClassModel([
+            entities.DerivedAttModel("author", False, False, "entity", lambda a, b, c: a),
+            entities.DerivedAttModel("full_content", True, True, "str", lambda a, b, c: a),
+        ]),
+        entities.AttClassModel([
+            entities.GeneratedAttModel("url_content_summary", False, False, "str", "TEXT", "This is the body of an HTML web page. {{url_content}} Can you please give a summary of its contents in 500 characters or less?")
+        ])
+    )
+
+    """
     def add_to_author_history(self):
         HNSubmission.add_to_author_history(self, "post")
 
     def remove_from_author_history(self):
         HNSubmission.remove_from_author_history(self, "post")
 
+    def load_derived_atts(self, user_factory=None, load_author_submission_history=False):
+
+        super().load_derived_atts(user_factory=user_factory, load_author_submission_history=load_author_submission_history)
+
+        self.atts['full_content'] = f"TITLE: {self.atts['title']}" + "\n"
+        if self.atts['text'] != '':
+            self.atts['full_content'] += f"BODY TEXT: {self.atts['text']}" + "\n"
+        if self.atts['url_content'] != '':
+            self.atts['full_content'] += f"URL CONTENT SUMMARY: {self.atts['url_content_summary']}"
+
+    def load_derived_embeddings(self, author_att_classes):
+        super().load_derived_embeddings(author_att_classes)
+
+        att_model = [att_model for att_model in self.entity_model['attributes']['derived'] if att_model['name'] == 'full_content'][0]
+        embeddings = self.chroma.retrieve(self.entity_model, att_model, self.id)
+        self.embeddings[att_model['name']] = embeddings['embeddings']        
+
     def get_prompt_str(self):
         return "POST: " + self.get_att("text")
+    """
 
 
-class HNComment(HNSubmission, entities.Branch):
+class HNComment(HNSubmission, entities.Stem):
+
+    model = entities.EntityModel(
+        "id",
+        "comments",
+        entities.AttClassModel([
+            entities.SqliteAttModel("by", False, False, "str", "TEXT"),
+            entities.SqliteAttModel("id", False, False, "int", "INTEGER"),
+            entities.SqliteAttModel("time", False, True, "int", "INTEGER"),
+            entities.SqliteAttModel("text", True, True, "str", "TEXT"),
+        ]),
+        entities.AttClassModel([
+            entities.DerivedAttModel("author", False, False, "entity", lambda a, b ,c: a),
+        ]),
+        entities.AttClassModel([])
+    )
 
     def __str__(self):
         contents = f"Comment with id {self.id}"
         return contents
+    """
 
     def add_to_author_history(self):
         HNSubmission.add_to_author_history(self, "comment")
@@ -191,3 +277,4 @@ class HNComment(HNSubmission, entities.Branch):
 
     def get_prompt_str(self):
         return "COMMENT: " + self.get_att("text")
+    """

@@ -6,17 +6,29 @@
 import json
 import functools
 
+from collections import deque
+
+import entities
+
+class Branch:
+    def __init__(self, root):
+        self.root = root
+        self.stems = []
+
+    def push_stem(self, stem):
+        self.stems.append(stem)
+
+    def pop_stem(self):
+        self.stems.pop()
+
 class SubmissionTreeNode:
 
-    @classmethod
-    def set_classvars(cls, entity_factory, sqlite, chroma, verbose):
-        cls.entity_factory = entity_factory
-        cls.sqlite = sqlite
-        cls.chroma = chroma
-        cls.verbose = verbose
     
-    def __init__(self, st_dict, parent=None):
+    def __init__(self, st_dict, root_factory, stem_factory, verbose=False, parent=None):
         self.id = st_dict["id"]
+        self.root_factory = root_factory
+        self.stem_factory = stem_factory
+        self.verbose = verbose
         self.is_root = parent == None
         self.parent = parent
         self.active = False
@@ -131,6 +143,9 @@ class SubmissionTreeNode:
     def convert_to_list(self):
         return self.dfs(lambda c: [c["st_node"], *c["desc_result"]], reduce_kids_f=lambda acc, c: [*acc, *c], reduce_kids_acc=[])
 
+    def get_descendant_list(self):
+        return self.dfs(lambda c: c["desc_result"] if c["st_node"].get_is_root() else [c["st_node"], *c["desc_result"]], reduce_kids_f=lambda acc, c: [*acc, *c], reduce_kids_acc=[])
+
     """
         Convert the tree back to its original, dict form.
     """
@@ -141,10 +156,11 @@ class SubmissionTreeNode:
     """
         Fetch the full submission object of this node with provided data sources
     """
-    def fetch_submission_object(self, loader):
-        submission_type = 'root' if self.is_root else 'branch'
-        submission_obj = self.entity_factory(submission_type, self.id, loader)
-        return submission_obj
+    def fetch_submission_object(self):
+        if self.is_root:
+            return self.root_factory(self.id)
+        else:
+            return self.stem_factory(self.id)
         
     """
         Check all items in this tree
@@ -152,26 +168,23 @@ class SubmissionTreeNode:
         generate a full feature set with it is present, and 
         if not, remove it.
     """
-    def clean(self, loader, check_dict):
-        try:
-            submission_obj = self.fetch_submission_object(loader)
-            if submission_obj.check(check_dict):
-                clean_kids = [kid for kid in self.kids if kid.clean(loader, check_dict)]
-                self.kids = clean_kids
-                return True
-            else:
-                return False
-        except Exception as e:
-            self._print(f"Error in potential response item:")
-            self._print(e)
-            self._print("Removing.\n")
-            return False
+    def clean(self, checker=None):
+        clean_kids = []
+        for kid in self.kids:
+            try:
+                kid_object = kid.fetch_submission_object()
+                if kid_object.check(checker=checker):
+                    kid.clean(checker=checker)
+                    clean_kids.append(kid)
+            except Exception as e:
+                continue
+        self.set_kids(clean_kids)
 
 
     """
         Iterate through the descendants of this tree via a DFS, with provided data sources
     """
-    def dfs(self, f, loader=None, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None):
+    def dfs(self, f,  filter_f=None, reduce_kids_f=None, reduce_kids_acc=None):
 
         f_inp = {
             "st_node": self,
@@ -179,15 +192,14 @@ class SubmissionTreeNode:
             "desc_result": None
         }
         
-        if loader != None:
-            f_inp["sub_obj"] = self.fetch_submission_object(loader)
+        f_inp["sub_obj"] = self.fetch_submission_object()
 
         if filter_f != None:
             filter_res = filter_f(f_inp)
             if filter_res == False:
                 return None
 
-        kid_results = [kid.dfs(f, loader=loader, filter_f=filter_f, reduce_kids_f=reduce_kids_f,reduce_kids_acc=reduce_kids_acc) for kid in self.kids] 
+        kid_results = [kid.dfs(f, filter_f=filter_f, reduce_kids_f=reduce_kids_f,reduce_kids_acc=reduce_kids_acc) for kid in self.kids] 
 
         if reduce_kids_f != None:
             reduced = functools.reduce(reduce_kids_f, kid_results, reduce_kids_acc)
@@ -195,29 +207,18 @@ class SubmissionTreeNode:
 
         return f(f_inp)
 
-    """
-        Recursively activate all children prior to a given time.
-    """
-    def activate_before_time(self, time):
+    def iter_dfs(self):
+        yield self.fetch_submission_object()
+        for kid in self.kids:
+            yield from kid.iter_dfs()
 
-        filter_f = lambda c: c["sub_obj"].get_att("time") < time if c["sub_obj"].get_att("time") != None else False
-        activate = lambda c: c["st_node"].activate()
-        self.dfs(activate, load={'base': {'sqlite': self.sqlite}}, filter_f=filter_f)
-
-    """
-        Get a list containing the ancestor path of all active nodes in this tree.
-    """
-    def get_all_active_branches(self):
+    def iter_dfs_branches(self, branch=None):
+        yield branch
         
-        filter_f = lambda c: c["st_node"].is_active()
-
-        reduce_kids_f = lambda acc, c: acc if c == None else [*acc, *c]
-
-        reduce_kids_acc = []
-
-        f = lambda c: [*[[c["st_node"]] + kid for kid in c["desc_result"]], [c["st_node"]]]
-        
-        return self.dfs(f, filter_f=filter_f, reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc)
+        for kid in self.kids:
+            branch.push_stem(kid.fetch_submission_object())
+            yield from kid.iter_dfs_branches(branch=branch)
+            branch.pop_stem()
 
 
 """
@@ -232,10 +233,9 @@ class SubmissionForestError(Exception):
 """
 
 class SubmissionForest:
-    def __init__(self, name, st_dict_list, entity_factory, sqlite, chroma, verbose=False):
+    def __init__(self, name, st_dict_list, root_factory, stem_factory, verbose=False):
         self.name = name
-        self.roots = [SubmissionTreeNode(st_dict) for st_dict in st_dict_list]
-        SubmissionTreeNode.set_classvars(entity_factory, sqlite, chroma, verbose)
+        self.roots = [SubmissionTreeNode(st_dict, root_factory, stem_factory, verbose=verbose) for st_dict in st_dict_list]
         self.verbose = verbose
     
     def _print(self, s):
@@ -374,27 +374,42 @@ class SubmissionForest:
     """
         Run a DFS on all roots, with given parameters.
     """
-    def dfs_roots(self, f, loader=None, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None):
-        return [root.dfs(f, loader=loader, filter_f=filter_f,
+    def dfs_roots(self, f, filter_f=None, reduce_kids_f=None, reduce_kids_acc=None):
+        return [root.dfs(f, filter_f=filter_f,
             reduce_kids_f=reduce_kids_f, reduce_kids_acc=reduce_kids_acc) for root in self.roots]
+
+    def iter_dfs(self):
+        for root in self.roots:
+            yield from root.iter_dfs()
+
+    def iter_bfs(self):
+        queue = deque(self.roots)
+        while queue:
+            node = queue.popleft()
+            yield node.fetch_submission_object()
+            for kid in node.kids:
+                queue.append(kid)
+
+    def iter_roots(self):
+        for root in self.roots:
+            yield root.fetch_submission_object()
+
+    def iter_dfs_branches(self):
+        for root in self.roots:
+            yield from root.iter_dfs_branches(branch=Branch(root.fetch_submission_object()))
 
     """
         Clean all roots.
     """
-    def clean(self, loader, check_dict):
-        clean_roots = [root for root in self.roots if root.clean(loader, check_dict)]
-        self.roots = clean_roots
+    def clean(self, root_checker=None, stem_checker=None):
+        clean_roots = []
+        for root in self.roots:
+            try:
+                root_object = root.fetch_submission_object()
+                if root_object.check(checker=root_checker):
+                    root.clean(checker=stem_checker)
+                    clean_roots.append(root)
+            except Exception as e:
+                continue
 
-    """
-        Get a list of timestamps for all roots.
-    """
-    def get_root_times(self):
-        root_times = [root.fetch_submission_object(load={'base': {'sqlite': self.sqlite}}).get_att("time") for root in self.roots]
-        return root_times
-
-    """
-        Get a list containing the ancestor path of all active nodes in this forest.
-    """
-    def get_all_active_branches(self, load={}):
-        all_active_branches = functools.reduce(lambda acc, b: [*acc, *b], [root.get_all_active_branches(load=load) for root in self.roots], [])
-        return all_active_branches
+        self.set_roots(clean_roots)

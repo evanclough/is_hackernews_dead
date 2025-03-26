@@ -2,6 +2,8 @@
     General unit tests for the dataset class.
 """
 
+import numpy as np
+
 import unittest
 import time
 import json
@@ -10,6 +12,16 @@ import utils
 import dataset
 import HN_entities
 import entities
+import when
+
+class NewTests(unittest.TestCase):
+    @classmethod
+    def setupClass(cls):
+        cls.forum = entities.Forum(HN_entities.HNUser, HN_entities.HNPost, HN_entities.HNComment)
+        cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
+        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.forum)
+
+    
 
 """
     Tests for initializing the dataset with various options.
@@ -21,32 +33,13 @@ class InitTests(unittest.TestCase):
         cls.entity_classes = {
             "user": HN_entities.HNUser,
             "root": HN_entities.HNPost,
-            "branch": HN_entities.HNComment
+            "stem": HN_entities.HNComment
         }
         cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
-        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes, verbose=True)
+        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes)
 
 
         print(f"Running tests on dataset {cls.test_dataset_name}...")
-
-    def get_cuo(self):
-        def create_user_object(uid):
-            return self.test_dataset.entity_factory("user", uid, load={'base': {'sqlite': self.test_dataset.sqlite}})
-        return create_user_object
-
-    def get_cpo(self):
-        def create_post_object(post_id):
-            return self.test_dataset.entity_factory("root", post_id, load={'base': {'sqlite': self.test_dataset.sqlite}})
-        return create_post_object
-        
-    def get_cco(self):
-        def create_comment_object(comment_id):
-            return self.test_dataset.entity_factory("branch", comment_id, load={'base': {'sqlite': self.test_dataset.sqlite}})
-        return create_comment_object
-
-    
-    def get_HN_derived_sload_dict(self):
-        return 
 
     """
         Test loading in a dataset.
@@ -69,7 +62,7 @@ class InitTests(unittest.TestCase):
         base_loader = entities.SqliteLoader("base")
         sub_loader = entities.EntityLoader(base=base_loader)
         post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
-        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("stem", id_val, sub_loader)
         user_derived_loader = HN_entities.HNUserLoader(post_factory, comment_factory)
         loader = entities.EntityLoader(base=base_loader, derived=user_derived_loader)
 
@@ -90,69 +83,75 @@ class InitTests(unittest.TestCase):
         base_loader = entities.SqliteLoader("base")
         user_loader = entities.EntityLoader(base=base_loader)
         user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
-        sf_derived_loader = HN_entities.HNSubmissionLoader(user_factory)
+        sf_derived_loader = HN_entities.HNSubmissionLoader(user_factory=user_factory)
         loader = entities.EntityLoader(base=base_loader, derived=sf_derived_loader)
         self.test_dataset.sf.dfs_roots(lambda a: a, loader=loader)
 
-
-    def test_merged_sfl(self):
-        base_loader = entities.SqliteLoader("base")
-        loader = entities.EntityLoader(base=base_loader)
-        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
-        sf_derived_loader = HN_entities.HNSubmissionLoader(user_factory)
-        loader = entities.EntityLoader(base=base_loader)
-        branches = self.test_dataset.sf.load_all_branches(loader)
-        for i in range(10):
-            print("TEXT:" + branches[i].get_att("text") + "\nCHAIN: " + branches[i].get_att("full_text_chain"))
-            print("\n\n\n")
 
     """
         Test generating embeddings for the user pool.
     """
     def test_embed_up(self):
         base_loader = entities.SqliteLoader("base")
-        sub_loader = entities.EntityLoader(base=base_loader)
+        gen_loader = entities.SqliteLoader("generated")
+        der_loader= HN_entities.HNSubmissionLoader()
+        sub_loader = entities.EntityLoader(base=base_loader, derived=der_loader, generated = gen_loader)
         post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
-        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("stem", id_val, sub_loader)
         user_derived_loader = HN_entities.HNUserLoader(post_factory, comment_factory)
         loader = entities.EntityLoader(base=base_loader, derived=user_derived_loader)
 
-        user_objects = self.test_dataset.user_pool.fetch_all_user_objects(loader=loader)
-
-        for user in user_objects:
+        for user in self.test_dataset.user_pool.iterate(loader):
             user.pupdate_in_chroma(embed_sub_his=True)
 
     def test_embed_sf(self):
         base_loader = entities.SqliteLoader("base")
-        root_loader = entities.EntityLoader(base=base_loader)
-        branch_loader = entities.EntityLoader(base=base_loader)
-        self.test_dataset.sf.embed(root_loader, branch_loader)
+        gen_loader = entities.SqliteLoader("generated")
+
+        user_loader = entities.EntityLoader(base=base_loader)
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+        derived_loader = HN_entities.HNSubmissionLoader()
+        
+        loader = entities.EntityLoader(base=base_loader, derived=derived_loader, generated=gen_loader)
+
+        for node in self.test_dataset.sf.iter_dfs(loader):
+            node.pupdate_in_chroma(embed_author=True)
+        
 
     def test_load_up_embeddings(self):
         base_loader = entities.SqliteLoader("base", embeddings=True)
-        sub_loader = entities.EntityLoader(base=base_loader)
+        gen_loader = entities.SqliteLoader('generated', embeddings=True)
+        user_loader = entities.EntityLoader(base=base_loader)
+        derived_loader = HN_entities.HNSubmissionLoader(embeddings=True, author_att_classes=[])
+        sub_loader = entities.EntityLoader(base=base_loader, derived=derived_loader)
         post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
-        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("stem", id_val, sub_loader)
         derived_loader = HN_entities.HNUserLoader(post_factory, comment_factory, sub_att_classes=['base'], embeddings=True)
-        loader = entities.EntityLoader(base=base_loader, derived=derived_loader)
+        loader = entities.EntityLoader(base=base_loader, derived=derived_loader,generated=gen_loader)
 
-        user_objects = self.test_dataset.user_pool.fetch_all_user_objects(loader=loader)
-
-        for user in user_objects:
+        for user in self.test_dataset.user_pool.iterate(loader):
             print(user.embeddings)
+            for post in user.get_att("posts"):
+                print(post.embeddings)
             for comment in user.get_att("comments"):
                 print(comment.embeddings)
+            for fav in user.get_att("favorite_posts"):
+                print(fav.embeddings)
 
 
     def test_load_sf_embeddings(self):
         base_loader = entities.SqliteLoader("base", embeddings=True)
-        root_loader = entities.EntityLoader(base=base_loader)
-        branch_loader = entities.EntityLoader(base=base_loader)
-        loaded_sf = self.test_dataset.sf.load_dict_list(root_loader, branch_loader, embeddings=True)
-        for root in loaded_sf:
-            print(root['root'].embeddings)
-            for branch in root['branches']:
-                print(branch.embeddings)
+        gen_loader = entities.SqliteLoader("generated", embeddings=True)
+
+        user_loader = entities.EntityLoader(base=base_loader)
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+        derived_loader = HN_entities.HNSubmissionLoader(user_factory=user_factory, embeddings=True, author_att_classes=['base', 'derived', 'generated'])
+        
+        loader = entities.EntityLoader(base=base_loader, derived=derived_loader, generated=gen_loader)
+
+        for node in self.test_dataset.sf.iter_dfs(loader):
+            print(node.embeddings)
+            print(node.get_att("author").embeddings)
 
 
 """
@@ -167,11 +166,11 @@ class CrudTests(unittest.TestCase):
         cls.entity_classes = {
             "user": HN_entities.HNUser,
             "root": HN_entities.HNPost,
-            "branch": HN_entities.HNComment
+            "stem": HN_entities.HNComment
         }
         cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
         cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes, verbose=True)
-        cls.insertion_num = 55555
+        cls.insertion_num = 33333
         cls.test_username = f"test_username{cls.insertion_num}"
 
         print(f"Running sqlite tests on existing dataset {cls.test_dataset_name}...")
@@ -201,7 +200,7 @@ class CrudTests(unittest.TestCase):
         base_sqlite_loader = entities.SqliteLoader("base")
         sub_loader = entities.EntityLoader(base=base_sqlite_loader)
         post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
-        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("stem", id_val, sub_loader)
         base_user_loader = entities.DictLoader("base", user_dict)
         derived_user_loader  =HN_entities.HNUserLoader(post_factory, comment_factory)
         loader = entities.EntityLoader(base=base_user_loader, derived=derived_user_loader)
@@ -270,7 +269,7 @@ class CrudTests(unittest.TestCase):
         base_comment_loader = entities.DictLoader("base", comment_dict)
         derived_comment_loader = HN_entities.HNSubmissionLoader(user_factory)
         loader = entities.EntityLoader(base=base_comment_loader, derived=derived_comment_loader)
-        comment = self.test_dataset.entity_factory("branch", self.insertion_num + 1, loader)
+        comment = self.test_dataset.entity_factory("stem", self.insertion_num + 1, loader)
 
         comment.pupdate_in_sqlite()
         comment.add_to_author_history()
@@ -300,7 +299,7 @@ class CrudTests(unittest.TestCase):
         base_comment_loader = entities.DictLoader("base", comment_dict)
         derived_comment_loader = HN_entities.HNSubmissionLoader(user_factory)
         loader = entities.EntityLoader(base=base_comment_loader, derived=derived_comment_loader)
-        comment = self.test_dataset.entity_factory("branch", self.insertion_num + 2, loader)
+        comment = self.test_dataset.entity_factory("stem", self.insertion_num + 2, loader)
 
         comment.pupdate_in_sqlite()
         comment.add_to_author_history()
@@ -319,7 +318,7 @@ class CrudTests(unittest.TestCase):
         base_sqlite_loader = entities.SqliteLoader("base", embeddings=True)
         sub_loader = entities.EntityLoader(base=base_sqlite_loader)
         post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
-        comment_factory = lambda id_val: self.test_dataset.entity_factory("branch", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("stem", id_val, sub_loader)
         derived_user_loader =HN_entities.HNUserLoader(post_factory, comment_factory)
         loader = entities.EntityLoader(base=base_sqlite_loader, derived=derived_user_loader)
         new_user = self.test_dataset.entity_factory("user", self.test_username, loader)
@@ -367,7 +366,7 @@ class CrudTests(unittest.TestCase):
 
         derived_comment_loader = HN_entities.HNSubmissionLoader(user_factory)
         loader = entities.EntityLoader(base=base_sqlite_loader, derived=derived_comment_loader)
-        comment = self.test_dataset.entity_factory("branch", self.insertion_num + 2, loader)
+        comment = self.test_dataset.entity_factory("stem", self.insertion_num + 2, loader)
 
         
         comment.delete_from_sqlite()
@@ -385,7 +384,7 @@ class CrudTests(unittest.TestCase):
 
         derived_comment_loader = HN_entities.HNSubmissionLoader(user_factory)
         loader = entities.EntityLoader(base=base_sqlite_loader, derived=derived_comment_loader)
-        comment = self.test_dataset.entity_factory("branch", self.insertion_num + 1, loader)
+        comment = self.test_dataset.entity_factory("stem", self.insertion_num + 1, loader)
         
         comment.delete_from_sqlite()
         comment.remove_from_author_history()
@@ -419,6 +418,66 @@ class CrudTests(unittest.TestCase):
         self.test_insertion()
         self.test_removal()
 
+class IterableTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.entity_classes = {
+            "user": HN_entities.HNUser,
+            "root": HN_entities.HNPost,
+            "stem": HN_entities.HNComment
+        }
+        cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
+        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes)
+        cls.insertion_num = 33333
+        cls.test_username = f"test_username{cls.insertion_num}"
+
+        print(f"Running sqlite tests on existing dataset {cls.test_dataset_name}...")
+        print(f"test insertion number: {cls.insertion_num}")
+
+    def test_up(self):
+        base_sqlite_loader = entities.SqliteLoader("base", embeddings=True)
+        sub_loader = entities.EntityLoader(base=base_sqlite_loader)
+        post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("stem", id_val, sub_loader)
+        derived_user_loader =HN_entities.HNUserLoader(post_factory, comment_factory)
+        loader = entities.EntityLoader(base=base_sqlite_loader, derived=derived_user_loader)
+
+        for user in self.test_dataset.user_pool.iterate(loader):
+            print(user.get_att("username"))
+
+    def test_sf(self):
+        base_sqlite_loader = entities.SqliteLoader("base", embeddings=True)
+        user_loader = entities.EntityLoader(base=base_sqlite_loader)
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+        derived_loader = HN_entities.HNSubmissionLoader(user_factory)
+        loader = entities.EntityLoader(base=base_sqlite_loader, derived=derived_loader)
+
+        print("DFS:")
+        for submission in self.test_dataset.sf.iter_dfs(loader):
+            print(submission.get_att("id"))
+
+        print("BFS: ")
+        for submission in self.test_dataset.sf.iter_bfs(loader):
+            print(submission.get_att("id"))
+
+    def test_sf_branch(self):
+        base_sqlite_loader = entities.SqliteLoader("base", embeddings=True)
+        user_loader = entities.EntityLoader(base=base_sqlite_loader)
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+        derived_loader = HN_entities.HNSubmissionLoader(user_factory)
+        loader = entities.EntityLoader(base=base_sqlite_loader, derived=derived_loader)
+
+        sf_iterable = self.test_dataset.sf.iter_dfs_branches(loader)
+
+        for branch in sf_iterable:
+            print("BRANCH")
+            print(f"ROOT: {branch.root.get_att('id')}")
+            print("STEMS: ")
+            for stem in branch.stems:
+                print(stem.get_att("id"))
+            print()
+
+
 class GenTests(unittest.TestCase):
 
     @classmethod
@@ -426,16 +485,36 @@ class GenTests(unittest.TestCase):
         cls.entity_classes = {
             "user": HN_entities.HNUser,
             "root": HN_entities.HNPost,
-            "branch": HN_entities.HNComment
+            "stem": HN_entities.HNComment
         }
         cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
-        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes, verbose=True)
+        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes)
         cls.insertion_num = 55555
         cls.test_username = f"test_username{cls.insertion_num}"
         cls.post_test_num = 41848209
 
         print(f"Running sqlite tests on existing dataset {cls.test_dataset_name}...")
         print(f"test insertion number: {cls.insertion_num}")
+
+    def test_sf_gen(self):
+        base_sqlite_loader = entities.SqliteLoader("base", embeddings=True)
+        user_loader = entities.EntityLoader(base=base_sqlite_loader)
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+        loader = entities.EntityLoader(base=base_sqlite_loader)
+
+        #for root in self.test_dataset.sf.iter_roots(loader):
+        #    root.generate_attribute("url_content_summary", self.test_dataset.llm)
+        #    root.pupdate_in_sqlite()
+        #    root.pupdate_in_chroma()
+
+        gen_loader = entities.SqliteLoader("generated", embeddings=True)
+        derived_loader = HN_entities.HNSubmissionLoader(user_factory)
+
+        loader = entities.EntityLoader(base=base_sqlite_loader, derived=derived_loader, generated=gen_loader)
+
+        for root in self.test_dataset.sf.iter_roots(loader):
+            print(root.get_att_dict())
+
 
     def test_basic(self):
         base_sqlite_loader = entities.SqliteLoader("base", embeddings=True)
@@ -479,10 +558,10 @@ class WhenTests(unittest.TestCase):
         cls.entity_classes = {
             "user": HN_entities.HNUser,
             "root": HN_entities.HNPost,
-            "branch": HN_entities.HNComment
+            "stem": HN_entities.HNComment
         }
         cls.test_dataset_name = utils.fetch_env_var("TEST_DATASET_NAME")
-        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes, verbose=True)
+        cls.test_dataset = dataset.Dataset(cls.test_dataset_name, cls.entity_classes)
         cls.insertion_num = 55555
         cls.test_username = f"test_username{cls.insertion_num}"
 
@@ -490,19 +569,109 @@ class WhenTests(unittest.TestCase):
         print(f"test insertion number: {cls.insertion_num}")
 
     def test_basic(self):
-        base_sqlite_loader = entities.SqliteLoader("base", embeddings=True)
+        base_loader = entities.SqliteLoader("base", embeddings=True)
+        gen_loader = entities.SqliteLoader('generated', embeddings=True)
+        user_loader = entities.EntityLoader(base=base_loader)
+        derived_loader = HN_entities.HNSubmissionLoader(embeddings=True, author_att_classes=[])
+        sub_loader = entities.EntityLoader(base=base_loader, derived=derived_loader, generated=gen_loader)
+        post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("stem", id_val, sub_loader)
+        derived_loader = HN_entities.HNUserLoader(post_factory, comment_factory, sub_att_classes=['base', 'generated'], embeddings=True)
 
-        user_loader = entities.EntityLoader(base=base_sqlite_loader)
+        user_loader = entities.EntityLoader(base=base_loader, derived=derived_loader,generated=gen_loader)
+
+
+        user_loader = entities.EntityLoader(base=base_loader)
         user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
-        derived_post_loader = HN_entities.HNSubmissionLoader(user_factory)
+        derived_loader = HN_entities.HNSubmissionLoader(user_factory=user_factory, embeddings=True, author_att_classes=['base', 'derived', 'generated'])
+        
+        branch_loader = entities.EntityLoader(base=base_loader, derived=derived_loader, generated=gen_loader)
 
-        gen_sqlite_loader = entities.SqliteLoader("generated", embeddings=True)
+        def get_training_row(user, branch, start_time, stop_time):
+            user_features = np.array([user.get_att("karma"), user.get_att("created")])
+            user_features = np.concatenate((user_features, user.embeddings['about']))
 
-        loader = entities.EntityLoader(base=base_sqlite_loader, derived=derived_post_loader, generated=gen_sqlite_loader)
+            root = branch.root
+            root_features = np.array([root.get_att("score"), root.get_att("time")])
+            root_features = np.concatenate((root_features, root.embeddings['full_content']))
 
-        post = self.test_dataset.entity_factory("root", self.insertion_num, loader)
+            latest_time = 0
+            average_time = 0
+            stem_embedding_average = np.zeros(self.test_dataset.embedding_model.dimension)
+            stems = branch.stems[:-1]
+            for stem in stems:
+                stem_embedding_average = stem_embedding_average +  (1 / len(stems)) * stem.embeddings['text']
+                latest_time = stem.get_time()
+                average_time += stem.get_time() * (1 / (len(stems)))
+            
+            stem_features = np.array([latest_time, average_time])
+            stem_features = np.concatenate((stem_features, stem_embedding_average))
 
-        print(post.get_numpy_array())
+            features = np.concatenate((user_features, root_features, stem_features, np.array([start_time])))
+
+            latest_stem = branch.stems[-1]
+
+            label = int(latest_stem.get_time() > start_time and latest_stem.get_time() < stop_time)
+            return features, label
+
+        def get_inference_row(user, branch, time):
+            user_features = np.array([user.get_att("karma"), user.get_att("created")])
+            user_features = np.concatenate((user_features, user.embeddings['about']))
+
+            root = branch.root
+            root_features = np.array([root.get_att("score"), root.get_att("time")])
+            root_features = np.concatenate((root_features, root.embeddings['full_content']))
+
+            latest_time = 0
+            average_time = 0
+            stem_embedding_average = np.zeros(self.test_dataset.embedding_model.dimension)
+            stems = branch.stems
+            for stem in stems:
+                stem_embedding_average = stem_embedding_average +  (1 / len(stems)) * stem.embeddings['text']
+                latest_time = stem.get_time()
+                average_time += stem.get_time() * (1 / (len(stems)))
+
+            stem_features = np.array([latest_time, average_time])
+            stem_features = np.concatenate((stem_features, stem_embedding_average))
+
+            features = np.concatenate((user_features, root_features, stem_features, np.array([time])))
+
+            return features
+
+
+        model = when.When("test", get_training_row, lambda a: a)
+
+        model.save_ds_train_data(self.test_dataset, user_loader, branch_loader)
+
+    def test_export_npy(self):
+        base_loader = entities.SqliteLoader("base", embeddings=True)
+        gen_loader = entities.SqliteLoader('generated', embeddings=True)
+        user_loader = entities.EntityLoader(base=base_loader)
+        derived_loader = HN_entities.HNSubmissionLoader(embeddings=True, author_att_classes=[])
+        sub_loader = entities.EntityLoader(base=base_loader, derived=derived_loader, generated=gen_loader)
+        post_factory = lambda id_val: self.test_dataset.entity_factory("root", id_val, sub_loader)
+        comment_factory = lambda id_val: self.test_dataset.entity_factory("stem", id_val, sub_loader)
+        derived_loader = HN_entities.HNUserLoader(post_factory, comment_factory, sub_att_classes=['base', 'generated'], embeddings=True)
+
+        user_loader = entities.EntityLoader(base=base_loader, derived=derived_loader,generated=gen_loader)
+
+
+        user_loader = entities.EntityLoader(base=base_loader)
+        user_factory = lambda uid: self.test_dataset.entity_factory("user", uid, user_loader)
+        derived_loader = HN_entities.HNSubmissionLoader(user_factory=user_factory, embeddings=True, author_att_classes=['base', 'derived', 'generated'])
+        
+        branch_loader = entities.EntityLoader(base=base_loader, derived=derived_loader, generated=gen_loader)
+
+        self.test_dataset.export_train_when(user_loader, branch_loader)
+
+    def test_xgboost(self):
+        features, labels = self.test_dataset.load_train_when()
+
+        model = when.XGBoostWhen("test2")
+
+        model.init_model()
+        model.train(features, labels)
+
 
 if __name__ == '__main__':
     unittest.main()
